@@ -1,0 +1,22 @@
+{
+  "name": "min-web",
+  "version": "0.0.1",
+  "description": "minify the webpage",
+  "main": "webtask.js",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "keywords": [
+    "minify",
+    "proxy",
+    "webtask",
+    "serverless"
+  ],
+  "author": "Beeno Tung",
+  "license": "BSD-3-Clause",
+  "dependencies": {
+    "jsdom": "^11.2.0",
+    "node-fetch": "^1.7.3",
+    "x-ray": "^2.3.2"
+  }
+}
