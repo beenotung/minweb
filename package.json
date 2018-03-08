@@ -15,8 +15,10 @@
   "author": "Beeno Tung",
   "license": "BSD-3-Clause",
   "dependencies": {
-    "jsdom": "^11.2.0",
-    "node-fetch": "^1.7.3",
-    "x-ray": "^2.3.2"
+    "isomorphic-fetch": "^2.2.1"
+  },
+  "devDependencies": {
+    "@types/isomorphic-fetch": "^0.0.34",
+    "@types/node": "^9.4.6"
   }
 }
