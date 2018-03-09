@@ -4,12 +4,12 @@ import {TextDecorator, Theme, ThemeStyles} from "./theme";
 const noop = () => {
 };
 
-
 export interface MinifyHTMLOptions {
   textDecorator?: TextDecorator
   theme?: Theme
   skipTags?: string[]
   url?: string
+  hrefPrefix?: string
 }
 
 const attrsToString = (attrs: Attribute[]) =>
@@ -43,6 +43,9 @@ function url_to_base(s: string): string {
 }
 
 export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
+  if (!s || !s.trim()) {
+    return '';
+  }
   const res = [];
   const skipTags: string[] = (options && options.skipTags) ? options.skipTags : [
     'script'
@@ -50,6 +53,12 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
     // , 'link'
     , 'img'
   ];
+  const hrefPrefix = (options && options.hrefPrefix) ? options.hrefPrefix : '';
+  const addPrefix = (s: string) =>
+    (s[0] == '"' || s[0] == "'")
+      ? s.replace(s[0], s[0] + hrefPrefix)
+      : hrefPrefix + s
+  ;
   const url: string = (options && options.url) ? options.url : '';
   const protocol = url_to_protocol(url);
   const host = url_to_host(url);
@@ -95,7 +104,13 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
         console.error({attrs});
       }
       if (url) {
-        if (name == 'a' || name == 'link') {
+        if (name == 'a') {
+          attrs.forEach(a => {
+            if (a.name == 'href' && a.value) {
+              a.value = addPrefix(fixUrl(a.value));
+            }
+          })
+        } else if (name == 'link') {
           attrs.forEach(a => {
             if (a.name == 'href' && a.value) {
               a.value = fixUrl(a.value);
@@ -104,10 +119,27 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
         } else if (name == 'img') {
           attrs.forEach(a => {
             if (a.name == 'src' && a.value) {
-              console.error('fixing img src:' + a.value);
               a.value = fixUrl(a.value);
             }
           })
+        } else if (name == 'form' && '') {
+          /* doesn't work */
+          console.error('checking form');
+          const method = attrs.find(a => a.name.toLowerCase() == 'method');
+          if (method && method.value) {
+            switch (method.value.toLowerCase()) {
+              case 'get':
+              case '"get"':
+              case "'get'":
+                attrs.forEach(a => {
+                  if (a.name == 'action' && a.value) {
+                    a.value = addPrefix(fixUrl(a.value));
+                    console.error("added prefix:" + a.value);
+                  }
+                });
+                break;
+            }
+          }
         }
       }
       res.push(`<${name}${attrs.length > 0 ? " " + attrsToString(attrs) : ""}>`)

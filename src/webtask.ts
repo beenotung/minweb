@@ -1,6 +1,7 @@
-const unescape = require("querystring").unescape;
 import {main} from "./main";
 import {Theme} from "./theme";
+
+const unescape = require("querystring").unescape;
 
 export interface Response {
   writeHead(statusCode: number, headers: any)
@@ -12,17 +13,16 @@ const htmlHeader = {
   "Content-Type": "text/html"
 };
 const body_to_html = (body: string) => `<html><head><meta charset="UTF-8"></head>${body}</html>`;
-module.exports = function (context, req: Request, res: Response) {
-  let url = req.url.replace('/minWeb/', '');
-  if (url === "/minWeb" || url === "") {
-    res.writeHead(200, htmlHeader);
-    const theme_str = [
-      'Default'
-      , 'Light'
-      , 'Dark'
-      , 'Console'
-    ].map(s => `<option value="${s.toLowerCase()}">${s}</option>`).join('');
-    res.end(body_to_html(`<body>
+
+function handleUI(context, req: Request, res: Response) {
+  res.writeHead(200, htmlHeader);
+  const theme_str = [
+    'Default'
+    , 'Light'
+    , 'Dark'
+    , 'Console'
+  ].map(s => `<option value="${s.toLowerCase()}">${s}</option>`).join('');
+  res.end(body_to_html(`<body>
 </body><h1>Minify Webpage</h1>
 
 <table>
@@ -57,7 +57,12 @@ Example:<br>
 https://wt-2f31e8aca451cf5494a2ee7270b6a7dc-0.run.webtask.io/minWeb/https://hk.yahoo.com/
 </p>
 `));
-    return;
+}
+
+function handleProxy(context, req: Request, res: Response) {
+  let url: string = req.url.replace('/minWeb', '');
+  if (url[0] == '/') {
+    url = url.substring(1);
   }
   let skipTags: string[] = [];
   let theme: Theme;
@@ -84,18 +89,19 @@ https://wt-2f31e8aca451cf5494a2ee7270b6a7dc-0.run.webtask.io/minWeb/https://hk.y
     }
   }
   if (url.indexOf('%') != -1) {
-    url = unescape(url);
+    url = encodeURI(unescape(url));
   }
   url = url ? ('http://' + url) : url;
   if (url.startsWith('http://http://') || url.startsWith('http://https://')) {
     url = url.replace('http://', '');
   }
-  // if ('tes') {
-  //   res.writeHead(200, htmlHeader);
-  //   res.end(body_to_html(`<pre>${url}</pre>`));
-  //   return;
-  // }
-  main(url, skipTags, theme)
+  const hrefPrefix = req.url.split('url=')[0] + 'url=';
+  if (!'tes') {
+    res.writeHead(200, htmlHeader);
+    res.end(body_to_html(`<pre>${hrefPrefix}</pre>`));
+    return;
+  }
+  main(url, {skipTags, theme, hrefPrefix})
     .then(html => {
       res.writeHead(200, htmlHeader);
       res.end(html);
@@ -111,4 +117,20 @@ https://wt-2f31e8aca451cf5494a2ee7270b6a7dc-0.run.webtask.io/minWeb/https://hk.y
         ));
       }
     )
+}
+
+module.exports = function (context, req: Request, res: Response) {
+  if (req.url.startsWith('/minWeb?') || req.url.startsWith('/minWeb/?')) {
+    return handleProxy(context, req, res);
+  }
+  if (req.url.startsWith('/minWeb/')) {
+    let url = req.url.replace('/minWeb/', '');
+    if (url.length === 0) {
+      return handleUI(context, req, res);
+    }
+    return handleProxy(context, req, res);
+  }
+  if (req.url.endsWith('/minWeb')) {
+    return handleUI(context, req, res);
+  }
 };

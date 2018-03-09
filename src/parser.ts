@@ -17,7 +17,7 @@ export interface HTMLParserOptions {
 
 const is_bracket = (s: string) => s == '<' || s == '>';
 const is_space = (s: string) => s == ' ' || s == '\n' || s == '\r' || s == '\t';
-const is_name_char = (s: string) => s != '=' && !is_space(s) && !is_bracket(s);
+const is_name_char = (s: string) => s != '=' && s != '/' && !is_space(s) && !is_bracket(s);
 
 function parseSpace(s: string, offset: number): number {
   for (; is_space(s[offset]); offset++) ;
