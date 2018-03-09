@@ -1,4 +1,4 @@
-import {TextDecorator} from "./core";
+export type TextDecorator = (s: string) => string;
 
 export const plainTextDecorator: TextDecorator = s => s;
 

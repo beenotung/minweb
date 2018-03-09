@@ -17,7 +17,7 @@ export interface HTMLParserOptions {
 
 const is_bracket = (s: string) => s == '<' || s == '>';
 const is_space = (s: string) => s == ' ' || s == '\n' || s == '\r' || s == '\t';
-const is_name_char = (s: string) => !is_space(s) && !is_bracket(s);
+const is_name_char = (s: string) => s != '=' && !is_space(s) && !is_bracket(s);
 
 function parseSpace(s: string, offset: number): number {
   for (; is_space(s[offset]); offset++) ;
@@ -49,8 +49,18 @@ function parseC(c: string, s: string, offset: number): number {
   return offset + 1;
 }
 
+const compare_str = (src: string, srcOffset: number, pattern: string): boolean => {
+  for (let i = 0; i < pattern.length; i++) {
+    if (src[srcOffset + i] != pattern[i]) {
+      return false;
+    }
+  }
+  return true;
+};
+
 export function parseHTMLText(s: string, offset = 0, options: HTMLParserOptions): void {
   console.error(`parseHTMLText(s, ${offset})`);
+  let tagName: string;
   main:
     for (; offset < s.length;) {
       offset = parseSpace(s, offset);
@@ -103,6 +113,7 @@ export function parseHTMLText(s: string, offset = 0, options: HTMLParserOptions)
             [name, offset] = parseName(s, offset);
             offset = parseSpace(s, offset);
             if (s[offset] == '=') {
+              offset++;
               /* has value */
               offset = parseSpace(s, offset);
               let value: string;
@@ -123,6 +134,7 @@ export function parseHTMLText(s: string, offset = 0, options: HTMLParserOptions)
             alsoClose = true;
           }
           if (mode == 'open') {
+            tagName = name;
             options.onopentag(name, attrs);
             if (alsoClose) {
               options.onclosetag(name);
@@ -136,8 +148,12 @@ export function parseHTMLText(s: string, offset = 0, options: HTMLParserOptions)
         default: {
           /* textContent */
           const start = offset;
-          for (; offset < s.length && s[offset] !== '<'; offset++) ;
-          console.error({start, end:offset});
+          if (tagName === 'script') {
+            for (; offset < s.length && !compare_str(s, offset, '</script>'); offset++) ;
+          } else {
+            for (; offset < s.length && s[offset] !== '<'; offset++) ;
+          }
+          console.error({start, end: offset});
           const text = s.substring(start, offset);
           options.ontext(text);
         }

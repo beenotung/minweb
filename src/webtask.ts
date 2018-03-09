@@ -6,9 +6,9 @@ export interface Response {
   end(html: string);
 }
 
-export default function (context, req: Request, res: Response) {
+module.exports = function (context, req: Request, res: Response) {
   const url = req.url.replace('/minWeb/', '');
-  if (url === "/minWeb") {
+  if (url === "/minWeb" || url === "") {
     res.writeHead(200, {"Content-Type": "text/html"});
     res.end(
       'Please append the target url at the end'
@@ -27,7 +27,8 @@ export default function (context, req: Request, res: Response) {
       res.end(
         '<h1>Error</h1>'
         + '<p>Failed to parse destination html</p>'
+        + `<p>url = ${url}</p>`
         + `<code>${JSON.stringify(e)}</code>`
       );
     })
-}
+};

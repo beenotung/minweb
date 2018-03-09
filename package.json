@@ -4,7 +4,7 @@
   "description": "minify the webpage",
   "main": "webtask.js",
   "scripts": {
-    "test": "node test.js"
+    "test": "ts-node src/test.ts"
   },
   "keywords": [
     "minify",
@@ -15,10 +15,10 @@
   "author": "Beeno Tung",
   "license": "BSD-3-Clause",
   "dependencies": {
-    "isomorphic-fetch": "^2.2.1"
+    "node-fetch": "^2.1.1"
   },
   "devDependencies": {
-    "@types/isomorphic-fetch": "^0.0.34",
-    "@types/node": "^9.4.6"
+    "@types/node": "^9.4.6",
+    "@types/node-fetch": "^1.6.7"
   }
 }

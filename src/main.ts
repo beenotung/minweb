@@ -1,4 +1,6 @@
-import * as fetch from "isomorphic-fetch"
+// import * as fetch from "isomorphic-fetch"
+// let fetch = require("isomorphic-fetch").fetch;
+let fetch = require("node-fetch");
 import {Theme} from "./theme";
 import {minifyHTML} from "./core";
 
