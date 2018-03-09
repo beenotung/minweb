@@ -1,3 +1,6 @@
 node_modules/
 .idea/
 .last
+*.log
+log
+out.html

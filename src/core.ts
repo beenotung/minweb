@@ -1,95 +1,32 @@
-export interface Attribute {
-  name: string;
-  value?: string;
+import {parseHTMLText} from "./parser";
+import {Theme, ThemeStyles} from "./theme";
+
+const noop = () => {
+};
+
+export type TextDecorator = (s: string) => string;
+
+export interface MinifyHTMLOptions {
+  textDecorator?: TextDecorator
+  theme?: Theme
 }
 
-export interface HTMLParserOptions {
-  onopencommand(name: string, attributes: Attribute[]);
-
-  onopentag(name: string, attributes: Attribute[]);
-
-  ontext (text: string);
-
-  onclosetag(name: string);
-}
-
-const is_bracket = (s: string) => s !== '<' && s !== '>';
-const is_space = (s: string) => s == ' ' || s == '\n' || s == '\r' || s == '\t';
-
-function parseSpace(s: string, offset: number): number {
-  for (; is_space(s[offset]); offset++) ;
-  return offset;
-}
-
-function parseName(s: string, offset: number): [string, number] {
-  let res = '';
-  for (const c = s[offset]; offset < s.length && !is_space(c) && !is_bracket(c); offset++) {
-    res += c;
-  }
-  return [res, offset];
-}
-
-function parseC(c: string, s: string, offset: number): number {
-  for (; s[offset] != c; offset++) ;
-  return offset + 1;
-}
-
-export function parseHTMLText(s: string, offset = 0, options: HTMLParserOptions) {
-  for (; ;) {
-    offset = parseSpace(s, offset);
-    if (offset >= s.length) {
-      return;
-    }
-    switch (s[offset]) {
-      case '<': {
-        offset = parseSpace(s, offset);
-        let mode: 'open' | 'close' | 'command';
-        const c = s[offset];
-        if (c == '!') {
-          mode = 'command'
-        } else if (c == '/') {
-          mode = 'close'
-        } else {
-          mode = 'open'
-        }
-        let name;
-        [name, offset] = parseName(s, offset);
-        if (mode == 'close') {
-          options.onclosetag(name);
-          offset = parseC('>', s, offset);
-          continue;
-        }
-        let attrs: Attribute[] = [];
-        for (; ;) {
-          offset = parseSpace(s, offset);
-          let name: string;
-          [name, offset] = parseName(s, offset);
-          offset = parseSpace(s, offset);
-          if (s[offset] == '=') {
-            /* has value */
-            offset = parseSpace(s, offset);
-            let value: string;
-            [value, offset] = parseName(s, offset);
-            attrs.push({name, value})
-          } else {
-            /* no value */
-            attrs.push({name})
-          }
-          if (s[offset] == '>') {
-            break;
-          }
-        }
-        if (mode == 'open') {
-          options.onopentag(name, attrs)
-        } else if (mode == 'command') {
-          options.onopencommand(name, attrs)
-        }
-        /* end of '<' case */
-      }
-        break;
-      default:
-        console.error("unknown token", {s, offset});
-        throw new Error("unknown token")
-    }
-  }
+export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
+  const res = [];
+  console.error(s);
+  console.error("total length:", s.length);
+  parseHTMLText(s, 0, {
+    oncommand: (name, attrs) => res.push(`<!${name}>`)
+    // , oncomment: text => res.push(`<!--${text}-->`)
+    , oncomment: noop
+    , onopentag: (name, attrs) => res.push(`<${name}>`)
+    , ontext: text =>
+      (options && options.textDecorator)
+        ? res.push(options.textDecorator(text))
+        : res.push(text)
+    , onclosetag: (name) => res.push(`</${name}>`)
+  });
+  const theme = (options && options.theme || 'default');
+  res.push(ThemeStyles.get(theme));
+  return res.join('');
 }
