@@ -122,6 +122,13 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
               a.value = fixUrl(a.value);
             }
           })
+        } else if (name == 'base' && '') {
+          /* breaking image links on some sites */
+          attrs.forEach(a => {
+            if (a.name == 'href' && a.value) {
+              a.value = hrefPrefix;
+            }
+          })
         } else if (name == 'form' && '') {
           /* doesn't work */
           console.error('checking form');
@@ -162,5 +169,6 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
   });
   const theme = (options && options.theme || 'default');
   res.push(ThemeStyles.get(theme));
+  // res.push(`<script>document.baseURI='${hrefPrefix}'</script>`);
   return res.join('');
 }
