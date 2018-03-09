@@ -30,7 +30,7 @@ function handleUI(context, req: Request, res: Response) {
 <tbody>
 <tr><td><label for="url">URL</label></td><td><input name="url"></td></tr>
 <tr><td><label for="theme">Theme</label></td><td><select name="theme">${theme_str}</select></td></tr>
-<tr><td><label for="article_mode">Article Mode</label></td><td><input name="article_mode" type="checkbox" checked></td></tr>
+<tr><td><label for="article_mode">Article Mode</label></td><td><input name="article_mode" type="checkbox"></td></tr>
 <tr><td><label for="no_script">No Script</label></td><td><input name="no_script" type="checkbox" checked></td></tr>
 <tr><td><label for="no_style">No Style</label></td><td><input name="no_style" type="checkbox"></td></tr>
 <tr><td><label for="no_img">No Image</label></td><td><input name="no_img" type="checkbox"></td></tr>
