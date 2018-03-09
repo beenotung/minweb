@@ -1,5 +1,6 @@
 import {main} from "./main";
 import {Theme} from "./theme";
+import {MinifyHTMLOptions} from "./core";
 
 const unescape = require("querystring").unescape;
 
@@ -12,7 +13,7 @@ export interface Response {
 const htmlHeader = {
   "Content-Type": "text/html"
 };
-const body_to_html = (body: string) => `<html><head><meta charset="UTF-8"></head>${body}</html>`;
+const body_to_html = (body: string) => `<html><head><meta charset="UTF-8"><title>Minify Webpage</title></head>${body}</html>`;
 
 function handleUI(context, req: Request, res: Response) {
   res.writeHead(200, htmlHeader);
@@ -29,6 +30,7 @@ function handleUI(context, req: Request, res: Response) {
 <tbody>
 <tr><td><label for="url">URL</label></td><td><input name="url"></td></tr>
 <tr><td><label for="theme">Theme</label></td><td><select name="theme">${theme_str}</select></td></tr>
+<tr><td><label for="article_mode">Article Mode</label></td><td><input name="article_mode" type="checkbox" checked></td></tr>
 <tr><td><label for="no_script">No Script</label></td><td><input name="no_script" type="checkbox" checked></td></tr>
 <tr><td><label for="no_style">No Style</label></td><td><input name="no_style" type="checkbox"></td></tr>
 <tr><td><label for="no_img">No Image</label></td><td><input name="no_img" type="checkbox"></td></tr>
@@ -41,6 +43,7 @@ function getOption(name){
 function go(){
   location.href += "?"
     + "theme=" +document.getElementsByName('theme')[0].value
+    + getOption('article_mode')
     + getOption('no_script')
     + getOption('no_style')
     + getOption('no_img')
@@ -65,12 +68,14 @@ function handleProxy(context, req: Request, res: Response) {
     url = url.substring(1);
   }
   let skipTags: string[] = [];
-  let theme: Theme;
+  let options: MinifyHTMLOptions = {skipTags};
   if (url[0] == '?') {
     url = url.substring(1);
     for (; ;) {
       if (url.startsWith('theme=')) {
-        theme = url.split('&')[0].replace('theme=', '') as Theme;
+        options.theme = url.split('&')[0].replace('theme=', '') as Theme;
+      } else if (url.startsWith('article_mode=true')) {
+        options.article_mode = true;
       } else if (url.startsWith('no_script=true')) {
         skipTags.push("script");
       } else if (url.startsWith('no_style=true')) {
@@ -95,13 +100,13 @@ function handleProxy(context, req: Request, res: Response) {
   if (url.startsWith('http://http://') || url.startsWith('http://https://')) {
     url = url.replace('http://', '');
   }
-  const hrefPrefix = req.url.split('url=')[0] + 'url=';
+  options.hrefPrefix = req.url.split('url=')[0] + 'url=';
   if (!'tes') {
     res.writeHead(200, htmlHeader);
-    res.end(body_to_html(`<pre>${hrefPrefix}</pre>`));
+    res.end(body_to_html(`<pre>${options.hrefPrefix}</pre>`));
     return;
   }
-  main(url, {skipTags, theme, hrefPrefix})
+  main(url, options)
     .then(html => {
       res.writeHead(200, htmlHeader);
       res.end(html);

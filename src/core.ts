@@ -1,5 +1,6 @@
 import {Attribute, parseHTMLText} from "./parser";
 import {TextDecorator, Theme, ThemeStyles} from "./theme";
+import {opt_out_html} from "./opt-out";
 
 const noop = () => {
 };
@@ -10,6 +11,7 @@ export interface MinifyHTMLOptions {
   skipTags?: string[]
   url?: string
   hrefPrefix?: string
+  article_mode?: boolean
 }
 
 const attrsToString = (attrs: Attribute[]) =>
@@ -150,6 +152,9 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
         }
       }
       res.push(`<${name}${attrs.length > 0 ? " " + attrsToString(attrs) : ""}>`)
+      if (name == 'body') {
+        res.push(opt_out_html)
+      }
     }
     , ontext: text => {
       if (skipTags.indexOf(tagName) != -1) {
@@ -169,6 +174,23 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
   });
   const theme = (options && options.theme || 'default');
   res.push(ThemeStyles.get(theme));
+  if (options && options.article_mode) {
+    res.push(`<style>body *{display: none;} article *{display: initial;}</style>`);
+    res.push(`<script>
+var es = document.getElementsByTagName('article');
+for(var i=es.length-1;i>=0;i--){
+  var e = es[i];
+  for(;;){
+    e.style.display='initial';
+    if(e.parentElement){
+      e=e.parentElement;
+    }else{
+      break;
+    }
+  }
+}
+</script>`);
+  }
   // res.push(`<script>document.baseURI='${hrefPrefix}'</script>`);
   return res.join('');
 }

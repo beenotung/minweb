@@ -13,6 +13,7 @@ url = 'https://games.yahoo.com.tw/';
 url = 'https://r.search.yahoo.com/cbclk/dWU9QjdCODZBRTlCNzQ2NEFFNSZ1dD0xNTIwNjE3ODE2MTg5JnVvPTcxOTQ5MzI3MjU5ODAwJmx0PTImZXM9QXQwLlNkd0dQUy4yeEpwbw--/RV=2/RE=1520646616/RO=10/RU=https%3a%2f%2f139138531.r.bat.bing.com%2f%3fld%3dd3-ALI12sUzyccKnkWzVxwcTVUCUyK7Cg53lfeS07QngoGb0g12Hlar5Zez7ZR-LLMhpRleMPRWaYOrbsb4g-kLKveSeWQeUS6r1PUGJamBDOjz1eh-tTcHQNrRUo7m7kvmFRJYIVnsTYuMSVwQSL5JO6wxf0%26u%3dhttps%253a%252f%252fad.doubleclick.net%252fddm%252fclk%252f404337215%253b204394749%253bg/RK=2/RS=d63UcC5UFER0RobH2Uooqqf8tVU-';
 url = 'https://hk.celebrity.yahoo.com/%E7%9B%B8%E9%9A%9417%E5%B9%B4%E8%BF%94%E7%84%A1%E7%B6%AB%E6%8B%8D%E5%8A%87-%E5%8D%83%E5%AC%85-%E7%82%BA%E6%BC%94%E8%97%9D%E5%B7%A5%E4%BD%9C%E5%A2%9E%E5%80%BC-224532527.html';
 url = 'https://hkuspace.hku.hk/#';
+url = 'https://hk.search.yahoo.com/search;_ylt=A2oKmJX33KJaSUQAywWzygt.;_ylc=X1MDMjExNDcwMjAwMwRfcgMyBGZyA3lmcC1zZWFyY2gtdG4EZ3ByaWQDSGh6MDVEVUFRTEN4ZkJ1OWFDQ2I1QQRuX3JzbHQDMARuX3N1Z2cDMTAEb3JpZ2luA2hrLnNlYXJjaC55YWhvby5jb20EcG9zAzAEcHFzdHIDBHBxc3RybAMwBHFzdHJsAzYEcXVlcnkDc2VhcmNoBHRfc3RtcAMxNTIwNjIyNzg0?p=search&fr2=sb-top&fr=yfp-search-tn';
 
 main(url, {
   // textDecorator: debugTextDecorator

@@ -59,6 +59,10 @@ function parseValue(s: string, offset: number): [string, number] {
     }
     if (mode == c) {
       mode = '';
+      if (offset != start) {
+        offset++;
+        break;
+      }
       continue;
     }
     if (mode == '' && !is_name_char(c)) {

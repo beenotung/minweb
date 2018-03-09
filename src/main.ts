@@ -1,14 +1,9 @@
 // import * as fetch from "isomorphic-fetch"
 // let fetch = require("isomorphic-fetch").fetch;
-const fetch = require("node-fetch");
-import {Theme} from "./theme";
+import {opt_out_html} from "./opt-out";
 import {minifyHTML, MinifyHTMLOptions} from "./core";
 
-export interface MainOptions {
-  skipTags?: string[]
-  theme?: Theme
-  hrefPrefix  ?: string
-}
+const fetch = require("node-fetch");
 
 function checkUrl(s: string): string {
   for (let i = s.length - 1; i >= 0; i--) {
@@ -30,10 +25,6 @@ export async function main(url: string, options?: MinifyHTMLOptions) {
     .then(s =>
       minifyHTML(s, options)
       + `<!--- url=${url} chars=${s.length} -->`
-      + `<hr><div style="text-align: center"><a href="#" onclick="
-location.href=location.href.indexOf('url=')!==-1
-?location.href.substring(location.href.indexOf('url=')+'url='.length)
-:location.href.replace(location.origin,'').replace('/minWeb/','')
-">Opt-Out</a></div>`
+      + opt_out_html
     )
 }
