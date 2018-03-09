@@ -16,9 +16,19 @@ export const debugTextDecorator: TextDecorator = s =>
 
 export type Theme = 'default' | 'light' | 'dark' | 'console';
 
-const genColorStyle = (background: string, color: string) => `<style>body,input,textarea{background:${background};color: ${color};}</style>`;
+const genColorStyle = (background: string, color: string, a_normal?: string, a_visited?: string) => {
+  let a = '';
+  if (a_normal) {
+    a += 'a{color:' + a_normal + ';}';
+  }
+  if (a_visited) {
+    a += 'a:visited{color:' + a_visited + ';}';
+  }
+  return `<style>body,input,textarea{background:${background};color: ${color};}${a}</style>`;
+};
+
 export const ThemeStyles = new Map<Theme, string>();
 ThemeStyles.set('default', '');
 ThemeStyles.set('light', genColorStyle('lightgrey', 'black'));
-ThemeStyles.set('dark', genColorStyle('black', 'lightgrey'));
-ThemeStyles.set('console', genColorStyle('black', 'lightgreen'));
+ThemeStyles.set('dark', genColorStyle('black', 'lightgrey', 'cornflowerblue', 'chocolate'));
+ThemeStyles.set('console', genColorStyle('black', 'lightgreen', 'green', 'darkorchid'));
