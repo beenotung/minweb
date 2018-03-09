@@ -12,6 +12,7 @@ export interface MinifyHTMLOptions {
   url?: string
   hrefPrefix?: string
   article_mode?: boolean
+  text_mode?: boolean
 }
 
 const attrsToString = (attrs: Attribute[]) =>
@@ -44,9 +45,77 @@ function url_to_base(s: string): string {
   return ss.join('/') + '/';
 }
 
+export interface Tag {
+  name: string;
+  attrs: Attribute[];
+  text: string;
+  children: Tag[];
+}
+
+function tag_has_text(tag: Tag): boolean {
+  return (!!tag.text.trim()) || tag.children.some(t => tag_has_text(t));
+}
+
+function tag_to_string(tag: Tag): string {
+  if ([
+      'script'
+      , 'button'
+      , 'img'
+      , 'video'
+    ].indexOf(tag.name) !== -1) {
+    return '';
+  }
+  if (tag_has_text(tag) || [
+      'meta'
+      , 'link'
+    ].indexOf(tag.name) !== -1) {
+    return `<${tag.name} ${attrsToString(tag.attrs)}>${tag.text}${tag.children.map(t => tag_to_string(t)).join('')}</${tag.name}>`
+  }
+  return '';
+  // throw new Error('unknown tag:' + tag.name);
+}
+
+export function minifyHTML_textonly(s: string): string {
+  const res: string[] = [];
+  let firstTag: Tag;
+  let tag: Tag;
+  let tagStack: Tag[] = [];
+  parseHTMLText(s, 0, {
+    oncomment: noop
+    , onopentag: (name, attributes) => {
+      let newTag = {name, attrs: attributes, text: '', children: []};
+      if (!firstTag) {
+        firstTag = newTag
+      }
+      tagStack.push(newTag);
+      if (tag) {
+        tag.children.push(newTag);
+      }
+      tag = newTag;
+    }
+    , ontext: text => {
+      if (!text.trim()) {
+        return;
+      }
+      tag.text = text;
+    }
+    , onclosetag: name => {
+      tagStack.pop();
+      tag = tagStack[tagStack.length - 1];
+    }
+    , oncommand: (name, attributes) => {
+      res.push(`<!${name} ${attrsToString(attributes)}>`)
+    }
+  });
+  return res.join('') + tag_to_string(firstTag);
+}
+
 export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
   if (!s || !s.trim()) {
     return '';
+  }
+  if (options && options.text_mode) {
+    s = minifyHTML_textonly(s)
   }
   const res = [];
   const skipTags: string[] = (options && options.skipTags) ? options.skipTags : [

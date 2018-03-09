@@ -30,6 +30,7 @@ function handleUI(context, req: Request, res: Response) {
 <tbody>
 <tr><td><label for="url">URL</label></td><td><input name="url"></td></tr>
 <tr><td><label for="theme">Theme</label></td><td><select name="theme">${theme_str}</select></td></tr>
+<tr><td><label for="text_mode">Text Mode</label></td><td><input name="text_mode" type="checkbox"></td></tr>
 <tr><td><label for="article_mode">Article Mode</label></td><td><input name="article_mode" type="checkbox"></td></tr>
 <tr><td><label for="no_script">No Script</label></td><td><input name="no_script" type="checkbox" checked></td></tr>
 <tr><td><label for="no_style">No Style</label></td><td><input name="no_style" type="checkbox"></td></tr>
@@ -43,6 +44,7 @@ function getOption(name){
 function go(){
   location.href += "?"
     + "theme=" +document.getElementsByName('theme')[0].value
+    + getOption('text_mode')
     + getOption('article_mode')
     + getOption('no_script')
     + getOption('no_style')
@@ -74,6 +76,8 @@ function handleProxy(context, req: Request, res: Response) {
     for (; ;) {
       if (url.startsWith('theme=')) {
         options.theme = url.split('&')[0].replace('theme=', '') as Theme;
+      } else if (url.startsWith('text_mode=true')) {
+        options.text_mode = true;
       } else if (url.startsWith('article_mode=true')) {
         options.article_mode = true;
       } else if (url.startsWith('no_script=true')) {
