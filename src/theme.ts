@@ -1,3 +1,5 @@
+import {ObjectMap} from "./utils";
+
 export type TextDecorator = (s: string) => string;
 
 export const plainTextDecorator: TextDecorator = s => s;
@@ -27,7 +29,7 @@ const genColorStyle = (background: string, color: string, a_normal?: string, a_v
   return `<style>body,input,textarea{background:${background};color: ${color};}${a}</style>`;
 };
 
-export const ThemeStyles = new Map<Theme, string>();
+export const ThemeStyles = new ObjectMap<Theme, string>();
 ThemeStyles.set('default', '');
 ThemeStyles.set('light', genColorStyle('lightgrey', 'black'));
 ThemeStyles.set('dark', genColorStyle('black', 'lightgrey', 'cornflowerblue', 'chocolate'));

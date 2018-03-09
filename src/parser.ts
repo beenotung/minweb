@@ -43,6 +43,34 @@ function parseName(s: string, offset: number): [string, number] {
   return [res, offset];
 }
 
+function parseValue(s: string, offset: number): [string, number] {
+  console.error(`parseValue(s, ${offset})`);
+  let start = offset;
+  let mode: '"' | "'" | '' = '';
+  for (; offset < s.length; offset++) {
+    const c = s[offset];
+    if (mode == '' && (c == '"' || c == "'")) {
+      mode = c;
+      continue;
+    }
+    if (mode !== '' && c == '\\') {
+      offset++;
+      continue;
+    }
+    if (mode == c) {
+      mode = '';
+      continue;
+    }
+    if (mode == '' && !is_name_char(c)) {
+      break;
+    }
+  }
+  console.error({last: s[offset], start, end: offset, mode});
+  const res = s.substring(start, offset);
+  console.error(`parsed value:${res}`);
+  return [res, offset];
+}
+
 function parseC(c: string, s: string, offset: number): number {
   console.error(`parseC(${c}, s, ${offset})`);
   for (; offset < s.length && s[offset] != c; offset++) ;
@@ -117,7 +145,7 @@ export function parseHTMLText(s: string, offset = 0, options: HTMLParserOptions)
               /* has value */
               offset = parseSpace(s, offset);
               let value: string;
-              [value, offset] = parseName(s, offset);
+              [value, offset] = parseValue(s, offset);
               attrs.push({name, value})
             } else {
               /* no value */
@@ -127,6 +155,7 @@ export function parseHTMLText(s: string, offset = 0, options: HTMLParserOptions)
               break;
             }
           }
+          console.error({attrs});
           offset = parseSpace(s, offset);
           let alsoClose = false;
           if (s[offset] == '/') {

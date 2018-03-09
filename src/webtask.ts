@@ -86,11 +86,15 @@ https://wt-2f31e8aca451cf5494a2ee7270b6a7dc-0.run.webtask.io/minWeb/https://hk.y
   if (url.indexOf('%') != -1) {
     url = unescape(url);
   }
-  url = ('http://' + url);
+  url = url ? ('http://' + url) : url;
   if (url.startsWith('http://http://') || url.startsWith('http://https://')) {
     url = url.replace('http://', '');
   }
-  console.error({url});
+  // if ('tes') {
+  //   res.writeHead(200, htmlHeader);
+  //   res.end(body_to_html(`<pre>${url}</pre>`));
+  //   return;
+  // }
   main(url, skipTags, theme)
     .then(html => {
       res.writeHead(200, htmlHeader);

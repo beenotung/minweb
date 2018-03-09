@@ -5,6 +5,7 @@ out="webtask.js"
 tsc -p tsconfig.webtask.json
 rm -f "$tmp"
 cat dist/parser.js >> "$tmp"
+cat dist/utils.js >> "$tmp"
 cat dist/theme.js >> "$tmp"
 cat dist/core.js >> "$tmp"
 cat dist/main.js >> "$tmp"
