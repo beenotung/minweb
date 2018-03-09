@@ -30,6 +30,10 @@ export async function main(url: string, options?: MinifyHTMLOptions) {
     .then(s =>
       minifyHTML(s, options)
       + `<!--- url=${url} chars=${s.length} -->`
-      + `<hr><div style="text-align: center"><a href="${url}">Opt-Out</a></div>`
+      + `<hr><div style="text-align: center"><a href="#" onclick="
+location.href=location.href.indexOf('url=')!==-1
+?location.href.substring(location.href.indexOf('url=')+'url='.length)
+:location.href.replace(location.origin,'').replace('/minWeb/','')
+">Opt-Out</a></div>`
     )
 }
