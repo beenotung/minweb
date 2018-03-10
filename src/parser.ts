@@ -250,6 +250,15 @@ export function parseHTMLTree(s: string): HTMLItem[] {
       } else {
         topLevel.push(c);
       }
+      if (!noBody && [
+          'img'
+          , 'br'
+          , 'hr'
+        ].indexOf(name.toLowerCase()) !== -1) {
+        /* this tag will never be closed (event) */
+        c.tag.noBody = true;
+        return;
+      }
       currentLevel = c;
       levelStack.push(c);
     }
@@ -261,7 +270,18 @@ export function parseHTMLTree(s: string): HTMLItem[] {
         topLevel.push(c);
       }
     }
-    , onclosetag: () => {
+    , onclosetag: (name, noBody) => {
+      if (currentLevel && currentLevel.tag) {
+        if (name !== currentLevel.tag.name) {
+          /* e.g. img */
+          if ('') {
+            console.error({name, noBody, currentLevel, levelStack: levelStack.map(x => x.tag.name)});
+            throw new Error('closing tag name unmatch');
+          }
+          currentLevel.tag.noBody = true;
+          levelStack.pop();
+        }
+      }
       levelStack.pop();
       currentLevel = levelStack[levelStack.length - 1];
     }
@@ -284,7 +304,7 @@ export const tag_head_to_string = (name: string, attributes: Attribute[]): strin
 export const htmlItem_to_string = (x: HTMLItem): string =>
   x.command ? `<!${tag_head_to_string(x.command.name, x.command.attributes)}>`
     : x.comment ? `<!--${x.comment}-->`
-    : x.tag ? '<' + tag_head_to_string(x.tag.name, x.tag.attributes) + (x.tag.noBody && x.children.length === 0 ? '/>' : x.children.map(htmlItem_to_string).join('') + `</${x.tag.name}>`)
+    : x.tag ? '<' + tag_head_to_string(x.tag.name, x.tag.attributes) + (x.tag.noBody && x.children.length === 0 ? '/>' : '>' + x.children.map(htmlItem_to_string).join('') + `</${x.tag.name}>`)
       : x.text ? x.text
         : (() => {
           console.error('unknown html item:', x);
@@ -294,7 +314,7 @@ export const htmlItem_to_string = (x: HTMLItem): string =>
 export const htmlItem_to_string_no_comment = (x: HTMLItem): string =>
   x.command ? `<!${tag_head_to_string(x.command.name, x.command.attributes)}>`
     : x.comment ? ''
-    : x.tag ? '<' + tag_head_to_string(x.tag.name, x.tag.attributes) + (x.tag.noBody && x.children.length === 0 ? '/>' : x.children.map(htmlItem_to_string_no_comment).join('') + `</${x.tag.name}>`)
+    : x.tag ? '<' + tag_head_to_string(x.tag.name, x.tag.attributes) + (x.tag.noBody && x.children.length === 0 ? '/>' : '>' + x.children.map(htmlItem_to_string_no_comment).join('') + `</${x.tag.name}>`)
       : x.text ? x.text
         : (() => {
           console.error('unknown html item:', x);

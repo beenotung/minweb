@@ -57,11 +57,18 @@ const Tag_Article = 'article';
 function filter_article(topLevel: HTMLItem[]): HTMLItem[] {
   const res: HTMLItem[] = [];
   topLevel.forEach(item => {
-    if (item_is_tag(item, Tag_Article)) {
+    if (item_is_tag(item, Tag_Article) || item_is_any_tag(item, tag_whitelist)) {
       return res.push(item);
     }
+    /*
+    console.error('before item_has_tag:', (item));
+    console.error('>>>>');
+    console.error(htmlItem_to_string(item));
+    console.error('<<<<');
+    */
     if (item_has_tag(item, Tag_Article)) {
-      res.push(...filter_article([item]));
+      res.push(item);
+      item.children = filter_article(item.children);
     }
   });
   return res;
@@ -95,7 +102,7 @@ function filter_skip_tag_attr(topLevel: HTMLItem[], skipTags: string[], skipAttr
     if (item.tag) {
       item.tag.attributes = item.tag.attributes
         .filter(a =>
-          skipAttrs.indexOf(a.name.toLowerCase()) === -1
+          (skipAttrs.indexOf(a.name.toLowerCase()) === -1)
           && skipAttrFs.every(f => f(a.name, a.value))
         )
       ;
@@ -199,7 +206,7 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
     if (skipTags.indexOf('script') !== -1) {
       /* plain static page */
       skipAttrs.push('class', 'id');
-      skipAttrFs.push((name, value) => name.startsWith('data-'));
+      skipAttrFs.push((name, value) => !name.startsWith('data-'));
     }
   }
   topLevel = filter_skip_tag_attr(topLevel, skipTags, skipAttrs, skipAttrFs);
