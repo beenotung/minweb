@@ -31,10 +31,18 @@ function handleUI(context, req: Request, res: Response) {
        src="https://camo.githubusercontent.com/38ef81f8aca64bb9a64448d0d70f1308ef5341ab/68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f72696768745f6461726b626c75655f3132313632312e706e67"
        alt="Fork me on GitHub"
        data-canonical-src="https://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png"></a>
-
+<script>
+function checkKey(event){
+  if(event.keyCode==13||event.key=="Enter"){
+    event.preventDefault();
+    go();
+    return false;
+  }
+}
+</script>
 <table>
 <tbody>
-<tr><td><label for="url">URL</label></td><td><input name="url"></td></tr>
+<tr><td><label for="url">URL</label></td><td><input name="url" onkeydown="checkKey(event)" onkeypress="checkKey(event)"></td></tr>
 <tr><td><label for="theme">Theme</label></td><td><select name="theme">${theme_str}</select></td></tr>
 <tr><td><label for="text_mode">Text Mode</label></td><td><input name="text_mode" type="checkbox"></td></tr>
 <tr><td><label for="article_mode">Article Mode</label></td><td><input name="article_mode" type="checkbox"></td></tr>
