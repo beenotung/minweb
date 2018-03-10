@@ -1,6 +1,6 @@
 import {Attribute, parseHTMLText} from "./parser";
 import {TextDecorator, Theme, ThemeStyles} from "./theme";
-import {opt_out_html} from "./opt-out";
+import {opt_out_line, opt_out_link} from "./opt-out";
 
 const noop = () => {
 };
@@ -222,7 +222,7 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
       }
       res.push(`<${name}${attrs.length > 0 ? " " + attrsToString(attrs) : ""}>`)
       if (name == 'body') {
-        res.push(opt_out_html)
+        res.push(opt_out_link + opt_out_line)
       }
     }
     , ontext: text => {
@@ -237,6 +237,9 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
     , onclosetag: (name) => {
       if (skipTags.indexOf(name) != -1) {
         return;
+      }
+      if (name == 'body') {
+        res.push(opt_out_line + opt_out_link)
       }
       res.push(`</${name}>`)
     }

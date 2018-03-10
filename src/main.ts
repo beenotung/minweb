@@ -1,6 +1,5 @@
 // import * as fetch from "isomorphic-fetch"
 // let fetch = require("isomorphic-fetch").fetch;
-import {opt_out_html} from "./opt-out";
 import {minifyHTML, MinifyHTMLOptions} from "./core";
 
 const fetch = require("node-fetch");
@@ -25,6 +24,5 @@ export async function main(url: string, options?: MinifyHTMLOptions) {
     .then(s =>
       minifyHTML(s, options)
       + `<!--- url=${url} chars=${s.length} -->`
-      + opt_out_html
     )
 }
