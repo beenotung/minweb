@@ -63,10 +63,14 @@ function go(){
 
 <h2>Use from URL</h2>
 <p>
-Append the target url at the end<br>
-Example:<br>
-https://wt-2f31e8aca451cf5494a2ee7270b6a7dc-0.run.webtask.io/minWeb/https://hk.yahoo.com/
+Append the target url at the end
 </p>
+Examples:
+<style>li{margin: 0.5em;}ul{margin: 0;}</style>
+<ul>
+<li><a href="#" onclick="location.href=this.textContent">https://wt-2f31e8aca451cf5494a2ee7270b6a7dc-0.run.webtask.io/minWeb/https://hk.yahoo.com/</a></li>
+<li><a href="#" onclick="location.href=this.textContent">https://wt-2f31e8aca451cf5494a2ee7270b6a7dc-0.run.webtask.io/minWeb/?theme=default&no_script=true&url=yahoo.hk</a></li>
+</ul>
 `));
 }
 
