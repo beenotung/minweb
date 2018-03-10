@@ -17,7 +17,7 @@ To read a webpage without over-bloated fancy stuff.
 . Default
 . Light
 . Dark
-. Console
+. Console (lightgreen on black)
 
 == Core Files
 
