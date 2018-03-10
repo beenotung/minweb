@@ -1,89 +1,142 @@
-import {
-  attrsToString,
-  command_to_string,
-  parseHTMLText,
-  parseHTMLTree,
-  Tag,
-  tag_head_to_string,
-  tag_is_any_name,
-  tag_to_string,
-  TagChild
-} from "./parser";
+import {HTMLItem, htmlItem_to_string_no_comment, parseHTMLTree, Tag} from "./parser";
 import {TextDecorator, Theme, ThemeStyles} from "./theme";
 import {opt_out_line, opt_out_link} from "./opt-out";
-import {arrayHasAll} from "./utils";
 
 const noop = () => {
 };
 
-function tag_has_text(tag: Tag): boolean {
-  return tag.children.some(t => typeof t === "string" ? !!t.trim() : tag_has_text(t));
-}
+/**
+ * @return <boolean> has or is text
+ * */
+const item_has_text = (item: HTMLItem): boolean =>
+  !!item.text || item.children.some(item_has_text);
 
-function tag_to_string_textonly(tag: Tag | string): string {
-  if (typeof tag === "string") {
-    return tag.trim();
-  }
-  if (tag_is_any_name(tag, [
-      'script'
-      , 'button'
-      , 'img'
-      , 'video'
-    ])) {
-    return '';
-  }
-  if (tag_has_text(tag) || tag_is_any_name(tag, [
-      'meta'
-      , 'link'
-    ])) {
-    return tag.noBody
-      ? `<${tag.name} ${attrsToString(tag.attributes)}/>`
-      : `<${tag.name} ${attrsToString(tag.attributes)}>${tag.children.map(t => tag_to_string_textonly(t)).join('')}</${tag.name}>`
-  }
-  return '';
-}
+const item_has_tag = (item: HTMLItem, name: string): boolean =>
+  (item.tag && item.tag.name.toLowerCase() == name) || item.children.some(item => item_has_tag(item, name));
 
-export function minifyHTML_textonly(s: string): string {
-  const [cmds, tag] = parseHTMLTree(s);
-  return cmds.map(c => command_to_string(c)).join('')
-    + tag_to_string_textonly(tag);
+const item_is_tag = (item: HTMLItem, name: string): boolean =>
+  item.tag && item.tag.name.toLowerCase() == name;
+
+const item_is_any_tag = (item: HTMLItem, names: string[]): boolean =>
+  item.tag && names.indexOf(item.tag.name.toLowerCase()) !== -1;
+
+
+/* for textonly and article */
+const tag_whitelist = [
+  'head'
+  , 'style'
+  , 'link'
+  , 'meta'
+];
+
+function filter_textonly(topLevel: HTMLItem[]): HTMLItem[] {
+  const res: HTMLItem[] = [];
+  topLevel.forEach(item => {
+    if (item_is_any_tag(item, [
+        'script'
+        , 'button'
+        , 'img'
+        , 'video'
+      ])) {
+      return;
+    }
+    if (item.command
+      || item.text
+      || item_is_any_tag(item, tag_whitelist)) {
+      return res.push(item)
+    }
+    if (item_has_text(item)) {
+      res.push(...filter_textonly([item]));
+    }
+  });
+  return res;
 }
 
 const Tag_Article = 'article';
-const tag_has_article = (t: TagChild): boolean =>
-  typeof t === "string"
-    ? false
-    : t.name.toLowerCase() == Tag_Article || t.children.some(tag_has_article)
-;
 
-function tag_to_string_article(tag: Tag): string {
-  if (tag_is_any_name(tag, [
-      Tag_Article
-      , 'head'
-      , 'script'
-      , 'style'
-      , 'link'
-    ])) {
-    /* this is the article tag */
-    return tag_to_string(tag);
-  }
-  if (tag_is_any_name(tag, [])) {
-    return '';
-  }
-  if (tag_has_article(tag)) {
-    /* has article child, but this is not article */
-    return tag.noBody
-      ? `<${tag.name} ${attrsToString(tag.attributes)}/>`
-      : `<${tag.name} ${attrsToString(tag.attributes)}>${tag.children.map(t => typeof t === "string" ? '' : tag_to_string_article(t)).join('')}</${tag.name}>`
-  }
-  /* not related to article */
-  return '';
+function filter_article(topLevel: HTMLItem[]): HTMLItem[] {
+  const res: HTMLItem[] = [];
+  topLevel.forEach(item => {
+    if (item_is_tag(item, Tag_Article)) {
+      return res.push(item);
+    }
+    if (item_has_tag(item, Tag_Article)) {
+      res.push(...filter_article([item]));
+    }
+  });
+  return res;
 }
 
-export function minifyHTML_article(s: string): string {
-  const [cmds, tag] = parseHTMLTree(s);
-  return cmds.map(c => command_to_string(c)).join('')
-    + tag_to_string_article(tag);
+function filter_skip_comment(topLevel: HTMLItem[]): HTMLItem[] {
+  const res: HTMLItem[] = [];
+  topLevel.forEach(item => {
+    if (item.comment) {
+      return;
+    }
+    res.push(item);
+    item.children = filter_skip_comment(item.children)
+  });
+  return res;
+}
+
+/**
+ * @param {Array<HTMLItem>} topLevel
+ * @param {Array<String>} skipTags
+ * @param {Array<String>} skipAttrs
+ * @param {Array<Function>} skipAttrFs return false if this element should be removed
+ * */
+function filter_skip_tag_attr(topLevel: HTMLItem[], skipTags: string[], skipAttrs: string[], skipAttrFs: Array<(name: string, value: string) => boolean>): HTMLItem[] {
+  const res: HTMLItem[] = [];
+  topLevel.forEach(item => {
+    if (item_is_any_tag(item, skipTags)) {
+      return;
+    }
+    res.push(item);
+    if (item.tag) {
+      item.tag.attributes = item.tag.attributes
+        .filter(a =>
+          skipAttrs.indexOf(a.name.toLowerCase()) === -1
+          && skipAttrFs.every(f => f(a.name, a.value))
+        )
+      ;
+    }
+    item.children = filter_skip_tag_attr(item.children, skipTags, skipAttrs, skipAttrFs);
+  });
+  return res;
+}
+
+function find_tag(topLevel: HTMLItem[], tagName: string): HTMLItem[] {
+  const res: HTMLItem[] = [];
+  topLevel.forEach(item => {
+    if (item_is_tag(item, tagName)) {
+      return res.push(item)
+    }
+    res.push(...find_tag(item.children, tagName));
+  });
+  return res;
+}
+
+function scanner_add_to_body(item: HTMLItem, preChildren: HTMLItem[], postChildren: HTMLItem[]) {
+  if (item_is_tag(item, 'body')) {
+    item.tag.noBody = false;
+    item.children = [...preChildren, ...item.children, ...postChildren];
+    return;
+  }
+  item.children.forEach(item => scanner_add_to_body(item, preChildren, postChildren));
+}
+
+function scanner_map_text(item: HTMLItem, f: (s: string) => string) {
+  if (item.text) {
+    item.text = f(item.text);
+  }
+  item.children.forEach(item => scanner_map_text(item, f));
+}
+
+function scanner_update_tag(item: HTMLItem, f: (tag: Tag) => void) {
+  if (item.tag) {
+    f(item.tag)
+  }
+  item.children.forEach(item => scanner_update_tag(item, f));
 }
 
 function url_to_protocol(s: string): string {
@@ -116,28 +169,41 @@ export interface MinifyHTMLOptions {
   text_mode?: boolean
 }
 
+const defaultSkipTags: string[] = [
+  'script'
+  // , 'style'
+  // , 'link'
+  , 'img'
+];
+
 export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
-  if (!s || !s.trim()) {
-    return '';
+  if (!s) {
+    return ''
   }
+  let topLevel = parseHTMLTree(s);
+  topLevel = filter_skip_comment(topLevel);
   if (options && options.article_mode) {
-    console.error('before minifyHTML_article:' + s.length);
-    s = minifyHTML_article(s);
-    console.error('after minifyHTML_article:' + s.length);
-    console.error('>>>>');
-    console.error(s);
-    console.error('<<<<');
+    topLevel = filter_article(topLevel)
   }
   if (options && options.text_mode) {
-    s = minifyHTML_textonly(s);
+    topLevel = filter_textonly(topLevel)
   }
-  const res = [];
-  const skipTags: string[] = (options && options.skipTags) ? options.skipTags : [
-    'script'
-    // , 'style'
-    // , 'link'
-    , 'img'
-  ];
+  // const res = [];
+  const skipTags: string[] = (options && options.skipTags) ? options.skipTags : defaultSkipTags;
+  const skipAttrs: string[] = [];
+  const skipAttrFs: Array<(name: string, value: string) => boolean> = [];
+
+  if (skipTags.indexOf('style') !== -1) {
+    skipTags.push('link');
+    skipAttrs.push('style');
+    if (skipTags.indexOf('script') !== -1) {
+      /* plain static page */
+      skipAttrs.push('class', 'id');
+      skipAttrFs.push((name, value) => name.startsWith('data-'));
+    }
+  }
+  topLevel = filter_skip_tag_attr(topLevel, skipTags, skipAttrs, skipAttrFs);
+
   const hrefPrefix = (options && options.hrefPrefix) ? options.hrefPrefix : '';
   const addPrefix = (s: string) =>
     (s[0] == '"' || s[0] == "'")
@@ -145,160 +211,109 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
       : hrefPrefix + s
   ;
   const url: string = (options && options.url) ? options.url : '';
-  const protocol = url_to_protocol(url);
-  const host = url_to_host(url);
-  const base = url_to_base(url);
-  const fixUrl = (url: string) => {
-    // console.error('before:' + url);
-    let wrapper: string = '';
-    if (url.startsWith('"') && url.endsWith('"')) {
-      wrapper = '"';
-    } else if (url.startsWith("'") && url.endsWith("'")) {
-      wrapper = "'";
-    }
-    if (wrapper) {
-      url = url.substring(1, url.length - 1);
-    }
-    url = url[0] == '/'
-      ? protocol + '://' + host + url
-      : (
-        url.startsWith('http://') || url.startsWith('https://')
-          ? url
-          : base + url
-      );
-    if (wrapper) {
-      url = wrapper + url + wrapper;
-    }
-    // console.error('after:' + url);
-    return url;
-  };
-  // console.error('s:');
-  // console.error('>>>>');
-  // console.error(s);
-  // console.error('<<<<');
-  // console.error("total length:", s.length);
-  let tagName: string;
-  parseHTMLText(s, 0, {
-    oncommand: (name, attrs) => res.push(`<!${name}${attrs.length > 0 ? " " + attrsToString(attrs) : ""}>`)
-    // , oncomment: text => res.push(`<!--${text}-->`)
-    , oncomment: noop
-    , onopentag: (name, attrs, noBody) => {
-      tagName = name;
-      if (skipTags.indexOf(name) !== -1) {
-        return;
+  if (url) {
+    const protocol = url_to_protocol(url);
+    const host = url_to_host(url);
+    const base = url_to_base(url);
+    const fixUrl = (url: string) => {
+      // console.error('before:' + url);
+      let wrapper: string = '';
+      if (url.startsWith('"') && url.endsWith('"')) {
+        wrapper = '"';
+      } else if (url.startsWith("'") && url.endsWith("'")) {
+        wrapper = "'";
       }
-      if (skipTags.indexOf('style') !== -1) {
-        attrs = attrs.filter(a => a.name.toLowerCase() !== 'style');
-        if (arrayHasAll(skipTags, ['script', 'link'])) {
-          /* plain static page */
-          attrs = attrs
-            .filter(a => {
-              const name = a.name.toLowerCase();
-              return name !== 'class'
-                && name !== 'id'
-                && !name.startsWith('data-');
-            })
-        }
+      if (wrapper) {
+        url = url.substring(1, url.length - 1);
       }
-      if (url) {
-        if (name == 'a') {
-          attrs.forEach(a => {
-            if (a.name == 'href' && a.value) {
-              a.value = addPrefix(fixUrl(a.value));
-            }
-          })
-        } else if (name == 'link') {
-          attrs.forEach(a => {
-            if (a.name == 'href' && a.value) {
-              a.value = fixUrl(a.value);
-            }
-          })
-        } else if (name == 'img') {
-          attrs.forEach(a => {
-            if (a.name == 'src' && a.value) {
-              a.value = fixUrl(a.value);
-            }
-          })
-        } else if (name == 'base' && '') {
-          /* breaking image links on some sites */
-          attrs.forEach(a => {
-            if (a.name == 'href' && a.value) {
-              a.value = hrefPrefix;
-            }
-          })
-        } else if (name == 'form' && '') {
-          /* doesn't work */
-          console.error('checking form');
-          const method = attrs.find(a => a.name.toLowerCase() == 'method');
-          if (method && method.value) {
-            switch (method.value.toLowerCase()) {
-              case 'get':
-              case '"get"':
-              case "'get'":
-                attrs.forEach(a => {
-                  if (a.name == 'action' && a.value) {
-                    a.value = addPrefix(fixUrl(a.value));
-                    console.error("added prefix:" + a.value);
-                  }
-                });
-                break;
-            }
+      url = url[0] == '/'
+        ? protocol + '://' + host + url
+        : (
+          url.startsWith('http://') || url.startsWith('https://')
+            ? url
+            : base + url
+        );
+      if (wrapper) {
+        url = wrapper + url + wrapper;
+      }
+      // console.error('after:' + url);
+      return url;
+    };
+    /* apply url fix */
+    topLevel.forEach(item => scanner_update_tag(item, tag => {
+      const name = tag.name.toLowerCase();
+      const attrs = tag.attributes;
+      if (name == 'a') {
+        attrs.forEach(a => {
+          if (a.name == 'href' && a.value) {
+            a.value = addPrefix(fixUrl(a.value));
+          }
+        })
+      } else if (name == 'link') {
+        attrs.forEach(a => {
+          if (a.name == 'href' && a.value) {
+            a.value = fixUrl(a.value);
+          }
+        })
+      } else if (name == 'img') {
+        attrs.forEach(a => {
+          if (a.name == 'src' && a.value) {
+            a.value = fixUrl(a.value);
+          }
+        })
+      } else if (name == 'base' && '') {
+        /* breaking image links on some sites */
+        attrs.forEach(a => {
+          if (a.name == 'href' && a.value) {
+            a.value = hrefPrefix;
+          }
+        })
+      } else if (name == 'form' && '') {
+        /* doesn't work */
+        console.error('checking form');
+        const method = attrs.find(a => a.name.toLowerCase() == 'method');
+        if (method && method.value) {
+          switch (method.value.toLowerCase()) {
+            case 'get':
+            case '"get"':
+            case "'get'":
+              attrs.forEach(a => {
+                if (a.name == 'action' && a.value) {
+                  a.value = addPrefix(fixUrl(a.value));
+                  console.error("added prefix:" + a.value);
+                }
+              });
+              break;
           }
         }
       }
-      const _name = name.toLowerCase();
-      if (_name == 'body' && noBody) {
-        res.push(`<${tag_head_to_string(name, attrs)}>`);
-        res.push(opt_out_link);
-        res.push(`</${name}>`);
-        return;
-      }
-      if (noBody) {
-        return res.push(`<${tag_head_to_string(name, attrs)}/>`)
-      }
-      res.push(`<${tag_head_to_string(name, attrs)}>`);
-      if (_name == 'body') {
-        res.push(opt_out_link + opt_out_line)
-      }
-    }
-    , ontext: text => {
-      if (skipTags.indexOf(tagName) != -1) {
-        return;
-      }
-      if (options && options.textDecorator) {
-        text = options.textDecorator(text);
-      }
-      res.push(text);
-    }
-    , onclosetag: (name, noBody) => {
-      if (noBody) {
-        return;
-      }
-      if (skipTags.indexOf(name.toLowerCase()) != -1) {
-        return;
-      }
-      res.push(`</${name}>`)
-    }
-  });
-  const theme = (options && options.theme || 'default');
-  res.push(ThemeStyles.get(theme));
-  if (options && options.article_mode && '') {
-    res.push(`<style>body *{display: none;} article *{display: initial;}</style>`);
-    res.push(`<script>
-var es = document.getElementsByTagName('article');
-for(var i=es.length-1;i>=0;i--){
-  var e = es[i];
-  for(;;){
-    e.style.display='initial';
-    if(e.parentElement){
-      e=e.parentElement;
-    }else{
-      break;
-    }
+    }))
   }
-}
-</script>`);
+  if (options && options.textDecorator) {
+    topLevel.forEach(item => scanner_map_text(item, options.textDecorator))
+  }
+  {
+    const themeName = (options && options.theme || 'default');
+    const themeHTML = ThemeStyles.get(themeName);
+    const themeStyle = parseHTMLTree(themeHTML);
+    const optOutLink = parseHTMLTree(opt_out_link);
+    const optOutLine = parseHTMLTree(opt_out_line);
+    find_tag(topLevel, 'body').forEach(body => {
+      if (body.tag.noBody) {
+        body.tag.noBody = false;
+        body.children.push(...optOutLink)
+      } else {
+        body.children = [
+          ...optOutLink
+          , ...optOutLine
+          , ...themeStyle
+          , ...body.children
+          , ...optOutLine
+          , ...optOutLink
+        ]
+      }
+    })
   }
   // res.push(`<script>document.baseURI='${hrefPrefix}'</script>`);
-  return res.join('');
+  return topLevel.map(htmlItem_to_string_no_comment).join('');
 }

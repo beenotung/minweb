@@ -13,7 +13,6 @@ export type TagChild = string | Tag;
 export interface Tag {
   name: string;
   attributes: Attribute[];
-  children: TagChild[];
   noBody: boolean
 }
 
@@ -212,37 +211,62 @@ export function parseHTMLText(s: string, offset = 0, options: HTMLParserOptions)
 
 const noop = () => {
 };
+export type HTMLItemType = 'command' | 'tag' | 'text' | 'comment';
 
-export function parseHTMLTree(s: string): [Command[], Tag] {
-  const commands: Command[] = [];
-  let firstTag: Tag;
-  let tag: Tag;
-  let tagStack: Tag[] = [];
+/* one and only one field */
+export interface HTMLItem {
+  command?: Command
+  comment?: string
+  tag?: Tag
+  text?: string
+  children: HTMLItem[]
+}
+
+export function parseHTMLTree(s: string): HTMLItem[] {
+  const topLevel: HTMLItem[] = [];
+  const levelStack: HTMLItem[] = [];
+  let currentLevel: HTMLItem;
   parseHTMLText(s, 0, {
-    oncomment: noop
+    oncommand: (name, attributes) => {
+      const c = {command: {name, attributes}, children: []};
+      if (currentLevel) {
+        currentLevel.children.push(c)
+      } else {
+        topLevel.push(c);
+      }
+    }
+    , oncomment: text => {
+      const c = {comment: text, children: []};
+      if (currentLevel) {
+        currentLevel.children.push(c);
+      } else {
+        topLevel.push(c);
+      }
+    }
     , onopentag: (name, attributes, noBody) => {
-      let newTag: Tag = {name, attributes, children: [], noBody};
-      if (!firstTag) {
-        firstTag = newTag
+      const c = {tag: {name, attributes, noBody}, children: []};
+      if (currentLevel) {
+        currentLevel.children.push(c);
+      } else {
+        topLevel.push(c);
       }
-      tagStack.push(newTag);
-      if (tag) {
-        tag.children.push(newTag);
-      }
-      tag = newTag;
+      currentLevel = c;
+      levelStack.push(c);
     }
     , ontext: text => {
-      tag.children.push(text);
+      const c = {text, children: []};
+      if (currentLevel) {
+        currentLevel.children.push(c);
+      } else {
+        topLevel.push(c);
+      }
     }
-    , onclosetag: name => {
-      tagStack.pop();
-      tag = tagStack[tagStack.length - 1];
-    }
-    , oncommand: (name, attributes) => {
-      commands.push({name, attributes});
+    , onclosetag: () => {
+      levelStack.pop();
+      currentLevel = levelStack[levelStack.length - 1];
     }
   });
-  return [commands, firstTag];
+  return topLevel;
 }
 
 export const attrsToString = (attrs: Attribute[]) =>
@@ -257,18 +281,23 @@ export const attrsToString = (attrs: Attribute[]) =>
 export const tag_head_to_string = (name: string, attributes: Attribute[]): string =>
   name + (attributes.length === 0 ? '' : ' ' + attrsToString(attributes));
 
-export const command_to_string = (c: Command): string =>
-  `<!${c.name} ${attrsToString(c.attributes)}>`;
-
-export const is_text = (x: TagChild): boolean => typeof x === "string";
-
-export const tag_child_to_string = (x: TagChild): string =>
-  typeof x === "string"
-    ? x
-    : tag_to_string(x)
+export const htmlItem_to_string = (x: HTMLItem): string =>
+  x.command ? `<!${tag_head_to_string(x.command.name, x.command.attributes)}>`
+    : x.comment ? `<!--${x.comment}-->`
+    : x.tag ? '<' + tag_head_to_string(x.tag.name, x.tag.attributes) + (x.tag.noBody && x.children.length === 0 ? '/>' : x.children.map(htmlItem_to_string).join('') + `</${x.tag.name}>`)
+      : x.text ? x.text
+        : (() => {
+          console.error('unknown html item:', x);
+          throw new Error('unknown html item:' + JSON.stringify(x))
+        })()
 ;
-export const tag_is_any_name = (tag: Tag, names: string[]) => names.indexOf(tag.name.toLowerCase()) !== -1;
-export const tag_to_string = (t: Tag): string =>
-  t.noBody
-    ? `<${t.name} ${attrsToString(t.attributes)}/>`
-    : `<${t.name} ${attrsToString(t.attributes)}>${t.children.map(x => tag_child_to_string(x)).join('')}</${t.name}>`;
+export const htmlItem_to_string_no_comment = (x: HTMLItem): string =>
+  x.command ? `<!${tag_head_to_string(x.command.name, x.command.attributes)}>`
+    : x.comment ? ''
+    : x.tag ? '<' + tag_head_to_string(x.tag.name, x.tag.attributes) + (x.tag.noBody && x.children.length === 0 ? '/>' : x.children.map(htmlItem_to_string_no_comment).join('') + `</${x.tag.name}>`)
+      : x.text ? x.text
+        : (() => {
+          console.error('unknown html item:', x);
+          throw new Error('unknown html item:' + JSON.stringify(x))
+        })()
+;
