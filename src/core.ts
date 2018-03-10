@@ -218,7 +218,6 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
     const host = url_to_host(url);
     const base = url_to_base(url);
     const fixUrl = (url: string) => {
-      // console.error('before:' + url);
       let wrapper: string = '';
       if (url.startsWith('"') && url.endsWith('"')) {
         wrapper = '"';
@@ -238,7 +237,6 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
       if (wrapper) {
         url = wrapper + url + wrapper;
       }
-      // console.error('after:' + url);
       return url;
     };
     /* apply url fix */

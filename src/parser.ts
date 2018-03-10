@@ -26,7 +26,6 @@ function parseSpace(s: string, offset: number): number {
 }
 
 function parseName(s: string, offset: number): [string, number] {
-  console.error(`parseName(s, ${offset})`);
   let res = '';
   for (; ; offset++) {
     const c = s[offset];
@@ -40,12 +39,10 @@ function parseName(s: string, offset: number): [string, number] {
     console.error('failed to parse name', {offset, c: s[offset]});
     throw new Error('failed to parse name');
   }
-  console.error('parsed name of length:', res.length);
   return [res, offset];
 }
 
 function parseValue(s: string, offset: number): [string, number] {
-  console.error(`parseValue(s, ${offset})`);
   let start = offset;
   let mode: '"' | "'" | '' = '';
   for (; offset < s.length; offset++) {
@@ -70,14 +67,11 @@ function parseValue(s: string, offset: number): [string, number] {
       break;
     }
   }
-  console.error({last: s[offset], start, end: offset, mode});
   const res = s.substring(start, offset);
-  console.error(`parsed value:${res}`);
   return [res, offset];
 }
 
 function parseC(c: string, s: string, offset: number): number {
-  console.error(`parseC(${c}, s, ${offset})`);
   for (; offset < s.length && s[offset] != c; offset++) ;
   return offset + 1;
 }
@@ -104,7 +98,6 @@ export interface HTMLParserOptions {
 }
 
 export function parseHTMLText(s: string, offset = 0, options: HTMLParserOptions): void {
-  console.error(`parseHTMLText(s, ${offset})`);
   let tagName: string;
   main:
     for (; offset < s.length;) {
@@ -172,7 +165,6 @@ export function parseHTMLText(s: string, offset = 0, options: HTMLParserOptions)
               break;
             }
           }
-          console.error({attrs});
           offset = parseSpace(s, offset);
           let alsoClose = false;
           if (s[offset] == '/') {
@@ -199,7 +191,6 @@ export function parseHTMLText(s: string, offset = 0, options: HTMLParserOptions)
           } else {
             for (; offset < s.length && s[offset] !== '<'; offset++) ;
           }
-          console.error({start, end: offset});
           if (start != offset) {
             const text = s.substring(start, offset);
             options.ontext(text);
