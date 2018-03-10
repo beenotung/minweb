@@ -1,9 +1,13 @@
 # min-web
-To read a webpage without over-bloating fancy stuff.
 
-| filename | desc |
+[Minify Webpage](https://minweb.surge.sh)
+
+To read a webpage without over-bloated fancy stuff.
+
+| Filename | Desc |
 |---|---|
-| core.js | the core logic |
+| src/core.ts | the core logic |
+| pack | build webtask version and copy into clipboard |
 | webtask.js | webtask version |
 | tampermonkey.js | tampermonkey version |
 
