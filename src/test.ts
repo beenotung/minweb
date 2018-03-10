@@ -33,7 +33,7 @@ main(url, {
   , url: url
   , hrefPrefix: 'https://minweb.surge.sh?url='
   , article_mode: true
-  // , text_mode: true
+  , text_mode: true
 }, htmlLogger)
   .then(s => console.log(s))
 ;

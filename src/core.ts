@@ -46,7 +46,8 @@ function filter_textonly(topLevel: HTMLItem[]): HTMLItem[] {
       return res.push(item)
     }
     if (item_has_text(item)) {
-      res.push(...filter_textonly([item]));
+      res.push(item)
+      item.children = filter_textonly(item.children);
     }
   });
   return res;
