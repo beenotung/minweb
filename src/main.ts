@@ -13,7 +13,7 @@ function checkUrl(s: string): string {
   return s;
 }
 
-export async function main(url: string, options?: MinifyHTMLOptions) {
+export async function main(url: string, options?: MinifyHTMLOptions, htmlMapper?: (s: string) => string) {
   if (!options) {
     options = {url}
   } else {
@@ -21,8 +21,13 @@ export async function main(url: string, options?: MinifyHTMLOptions) {
   }
   return fetch(checkUrl(url))
     .then(x => x.text())
+    .then(s => htmlMapper ? htmlMapper(s) : s)
     .then(s =>
       minifyHTML(s, options)
-      + `<!--- url=${url} chars=${s.length} -->`
+      + `\n<!--- url=${url} chars=${s.length} -->`
     )
+    .catch(e => {
+      console.error(e);
+      return Promise.reject(e)
+    })
 }

@@ -10,3 +10,6 @@ export class ObjectMap<K extends PropertyKey, V> {
     this.o[key] = value;
   }
 }
+
+export const arrayHas = <A>(xs: A[], x: A): boolean => xs.indexOf(x) !== -1;
+export const arrayHasAll = <A>(xs: A[], patterns: A[]) => patterns.every(x => arrayHas(xs, x));

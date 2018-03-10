@@ -3,16 +3,18 @@ export interface Attribute {
   value?: string;
 }
 
-export interface HTMLParserOptions {
-  oncommand(name: string, attributes: Attribute[]);
+export interface Command {
+  name: string;
+  attributes: Attribute[];
+}
 
-  oncomment(text: string);
+export type TagChild = string | Tag;
 
-  onopentag(name: string, attributes: Attribute[]);
-
-  ontext (text: string);
-
-  onclosetag(name: string);
+export interface Tag {
+  name: string;
+  attributes: Attribute[];
+  children: TagChild[];
+  noBody: boolean
 }
 
 const is_bracket = (s: string) => s == '<' || s == '>';
@@ -90,6 +92,18 @@ const compare_str = (src: string, srcOffset: number, pattern: string): boolean =
   return true;
 };
 
+export interface HTMLParserOptions {
+  oncommand(name: string, attributes: Attribute[]);
+
+  oncomment(text: string);
+
+  onopentag(name: string, attributes: Attribute[], noBody: boolean);
+
+  ontext (text: string);
+
+  onclosetag(name: string, noBody: boolean);
+}
+
 export function parseHTMLText(s: string, offset = 0, options: HTMLParserOptions): void {
   console.error(`parseHTMLText(s, ${offset})`);
   let tagName: string;
@@ -131,7 +145,7 @@ export function parseHTMLText(s: string, offset = 0, options: HTMLParserOptions)
           let name;
           [name, offset] = parseName(s, offset);
           if (mode == 'close') {
-            options.onclosetag(name);
+            options.onclosetag(name, false);
             offset = parseC('>', s, offset);
             continue;
           }
@@ -168,9 +182,9 @@ export function parseHTMLText(s: string, offset = 0, options: HTMLParserOptions)
           }
           if (mode == 'open') {
             tagName = name;
-            options.onopentag(name, attrs);
+            options.onopentag(name, attrs, alsoClose);
             if (alsoClose) {
-              options.onclosetag(name);
+              options.onclosetag(name, alsoClose);
             }
           } else if (mode == 'command') {
             options.oncommand(name, attrs)
@@ -187,9 +201,74 @@ export function parseHTMLText(s: string, offset = 0, options: HTMLParserOptions)
             for (; offset < s.length && s[offset] !== '<'; offset++) ;
           }
           console.error({start, end: offset});
-          const text = s.substring(start, offset);
-          options.ontext(text);
+          if (start != offset) {
+            const text = s.substring(start, offset);
+            options.ontext(text);
+          }
         }
       }
     }
 }
+
+const noop = () => {
+};
+
+export function parseHTMLTree(s: string): [Command[], Tag] {
+  const commands: Command[] = [];
+  let firstTag: Tag;
+  let tag: Tag;
+  let tagStack: Tag[] = [];
+  parseHTMLText(s, 0, {
+    oncomment: noop
+    , onopentag: (name, attributes, noBody) => {
+      let newTag: Tag = {name, attributes, children: [], noBody};
+      if (!firstTag) {
+        firstTag = newTag
+      }
+      tagStack.push(newTag);
+      if (tag) {
+        tag.children.push(newTag);
+      }
+      tag = newTag;
+    }
+    , ontext: text => {
+      tag.children.push(text);
+    }
+    , onclosetag: name => {
+      tagStack.pop();
+      tag = tagStack[tagStack.length - 1];
+    }
+    , oncommand: (name, attributes) => {
+      commands.push({name, attributes});
+    }
+  });
+  return [commands, firstTag];
+}
+
+export const attrsToString = (attrs: Attribute[]) =>
+  attrs
+    .map(a =>
+      a.value
+        ? a.name + "=" + a.value
+        : a.name
+    )
+    .join(' ')
+;
+export const tag_head_to_string = (name: string, attributes: Attribute[]): string =>
+  name + (attributes.length === 0 ? '' : ' ' + attrsToString(attributes));
+
+export const command_to_string = (c: Command): string =>
+  `<!${c.name} ${attrsToString(c.attributes)}>`;
+
+export const is_text = (x: TagChild): boolean => typeof x === "string";
+
+export const tag_child_to_string = (x: TagChild): string =>
+  typeof x === "string"
+    ? x
+    : tag_to_string(x)
+;
+export const tag_is_any_name = (tag: Tag, names: string[]) => names.indexOf(tag.name.toLowerCase()) !== -1;
+export const tag_to_string = (t: Tag): string =>
+  t.noBody
+    ? `<${t.name} ${attrsToString(t.attributes)}/>`
+    : `<${t.name} ${attrsToString(t.attributes)}>${t.children.map(x => tag_child_to_string(x)).join('')}</${t.name}>`;

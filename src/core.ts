@@ -1,29 +1,88 @@
-import {Attribute, parseHTMLText} from "./parser";
+import {
+  attrsToString,
+  command_to_string,
+  parseHTMLText,
+  parseHTMLTree,
+  Tag,
+  tag_head_to_string,
+  tag_is_any_name,
+  tag_to_string,
+  TagChild
+} from "./parser";
 import {TextDecorator, Theme, ThemeStyles} from "./theme";
 import {opt_out_line, opt_out_link} from "./opt-out";
+import {arrayHasAll} from "./utils";
 
 const noop = () => {
 };
 
-export interface MinifyHTMLOptions {
-  textDecorator?: TextDecorator
-  theme?: Theme
-  skipTags?: string[]
-  url?: string
-  hrefPrefix?: string
-  article_mode?: boolean
-  text_mode?: boolean
+function tag_has_text(tag: Tag): boolean {
+  return tag.children.some(t => typeof t === "string" ? !!t.trim() : tag_has_text(t));
 }
 
-const attrsToString = (attrs: Attribute[]) =>
-  attrs
-    .map(a =>
-      a.value
-        ? a.name + "=" + a.value
-        : a.name
-    )
-    .join(' ')
+function tag_to_string_textonly(tag: Tag | string): string {
+  if (typeof tag === "string") {
+    return tag.trim();
+  }
+  if (tag_is_any_name(tag, [
+      'script'
+      , 'button'
+      , 'img'
+      , 'video'
+    ])) {
+    return '';
+  }
+  if (tag_has_text(tag) || tag_is_any_name(tag, [
+      'meta'
+      , 'link'
+    ])) {
+    return tag.noBody
+      ? `<${tag.name} ${attrsToString(tag.attributes)}/>`
+      : `<${tag.name} ${attrsToString(tag.attributes)}>${tag.children.map(t => tag_to_string_textonly(t)).join('')}</${tag.name}>`
+  }
+  return '';
+}
+
+export function minifyHTML_textonly(s: string): string {
+  const [cmds, tag] = parseHTMLTree(s);
+  return cmds.map(c => command_to_string(c)).join('')
+    + tag_to_string_textonly(tag);
+}
+
+const Tag_Article = 'article';
+const tag_has_article = (t: TagChild): boolean =>
+  typeof t === "string"
+    ? false
+    : t.name.toLowerCase() == Tag_Article || t.children.some(tag_has_article)
 ;
+
+function tag_to_string_article(tag: Tag): string {
+  if (tag_is_any_name(tag, [
+      Tag_Article
+      , 'head'
+      , 'script'
+    ])) {
+    /* this is the article tag */
+    return tag_to_string(tag);
+  }
+  if (tag_is_any_name(tag, [])) {
+    return '';
+  }
+  if (tag_has_article(tag)) {
+    /* has article child, but this is not article */
+    return tag.noBody
+      ? `<${tag.name} ${attrsToString(tag.attributes)}/>`
+      : `<${tag.name} ${attrsToString(tag.attributes)}>${tag.children.map(t => typeof t === "string" ? '' : tag_to_string_article(t)).join('')}</${tag.name}>`
+  }
+  /* not related to article */
+  return '';
+}
+
+export function minifyHTML_article(s: string): string {
+  const [cmds, tag] = parseHTMLTree(s);
+  return cmds.map(c => command_to_string(c)).join('')
+    + tag_to_string_article(tag);
+}
 
 function url_to_protocol(s: string): string {
   return s.split('://')[0];
@@ -45,69 +104,14 @@ function url_to_base(s: string): string {
   return ss.join('/') + '/';
 }
 
-export interface Tag {
-  name: string;
-  attrs: Attribute[];
-  text: string;
-  children: Tag[];
-}
-
-function tag_has_text(tag: Tag): boolean {
-  return (!!tag.text.trim()) || tag.children.some(t => tag_has_text(t));
-}
-
-function tag_to_string(tag: Tag): string {
-  if ([
-      'script'
-      , 'button'
-      , 'img'
-      , 'video'
-    ].indexOf(tag.name) !== -1) {
-    return '';
-  }
-  if (tag_has_text(tag) || [
-      'meta'
-      , 'link'
-    ].indexOf(tag.name) !== -1) {
-    return `<${tag.name} ${attrsToString(tag.attrs)}>${tag.text}${tag.children.map(t => tag_to_string(t)).join('')}</${tag.name}>`
-  }
-  return '';
-  // throw new Error('unknown tag:' + tag.name);
-}
-
-export function minifyHTML_textonly(s: string): string {
-  const res: string[] = [];
-  let firstTag: Tag;
-  let tag: Tag;
-  let tagStack: Tag[] = [];
-  parseHTMLText(s, 0, {
-    oncomment: noop
-    , onopentag: (name, attributes) => {
-      let newTag = {name, attrs: attributes, text: '', children: []};
-      if (!firstTag) {
-        firstTag = newTag
-      }
-      tagStack.push(newTag);
-      if (tag) {
-        tag.children.push(newTag);
-      }
-      tag = newTag;
-    }
-    , ontext: text => {
-      if (!text.trim()) {
-        return;
-      }
-      tag.text = text;
-    }
-    , onclosetag: name => {
-      tagStack.pop();
-      tag = tagStack[tagStack.length - 1];
-    }
-    , oncommand: (name, attributes) => {
-      res.push(`<!${name} ${attrsToString(attributes)}>`)
-    }
-  });
-  return res.join('') + tag_to_string(firstTag);
+export interface MinifyHTMLOptions {
+  textDecorator?: TextDecorator
+  theme?: Theme
+  skipTags?: string[]
+  url?: string
+  hrefPrefix?: string
+  article_mode?: boolean
+  text_mode?: boolean
 }
 
 export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
@@ -115,7 +119,15 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
     return '';
   }
   if (options && options.text_mode) {
-    s = minifyHTML_textonly(s)
+    s = minifyHTML_textonly(s);
+  }
+  if (options && options.article_mode) {
+    console.error('before minifyHTML_article:' + s.length);
+    s = minifyHTML_article(s);
+    console.error('after minifyHTML_article:' + s.length);
+    console.error('>>>>');
+    console.error(s);
+    console.error('<<<<');
   }
   const res = [];
   const skipTags: string[] = (options && options.skipTags) ? options.skipTags : [
@@ -135,7 +147,7 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
   const host = url_to_host(url);
   const base = url_to_base(url);
   const fixUrl = (url: string) => {
-    console.error('before:' + url);
+    // console.error('before:' + url);
     let wrapper: string = '';
     if (url.startsWith('"') && url.endsWith('"')) {
       wrapper = '"';
@@ -155,24 +167,36 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
     if (wrapper) {
       url = wrapper + url + wrapper;
     }
-    console.error('after:' + url);
+    // console.error('after:' + url);
     return url;
   };
-  console.error(s);
-  console.error("total length:", s.length);
+  // console.error('s:');
+  // console.error('>>>>');
+  // console.error(s);
+  // console.error('<<<<');
+  // console.error("total length:", s.length);
   let tagName: string;
   parseHTMLText(s, 0, {
     oncommand: (name, attrs) => res.push(`<!${name}${attrs.length > 0 ? " " + attrsToString(attrs) : ""}>`)
     // , oncomment: text => res.push(`<!--${text}-->`)
     , oncomment: noop
-    , onopentag: (name, attrs) => {
+    , onopentag: (name, attrs, noBody) => {
       tagName = name;
       if (skipTags.indexOf(name) !== -1) {
         return;
       }
       if (skipTags.indexOf('style') !== -1) {
-        attrs = attrs.filter(a => a.name !== 'style');
-        console.error({attrs});
+        attrs = attrs.filter(a => a.name.toLowerCase() !== 'style');
+        if (arrayHasAll(skipTags, ['script', 'link'])) {
+          /* plain static page */
+          attrs = attrs
+            .filter(a => {
+              const name = a.name.toLowerCase();
+              return name !== 'class'
+                && name !== 'id'
+                && !name.startsWith('data-');
+            })
+        }
       }
       if (url) {
         if (name == 'a') {
@@ -220,8 +244,18 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
           }
         }
       }
-      res.push(`<${name}${attrs.length > 0 ? " " + attrsToString(attrs) : ""}>`)
-      if (name == 'body') {
+      const _name = name.toLowerCase();
+      if (_name == 'body' && noBody) {
+        res.push(`<${tag_head_to_string(name, attrs)}>`);
+        res.push(opt_out_link);
+        res.push(`</${name}>`);
+        return;
+      }
+      if (noBody) {
+        return res.push(`<${tag_head_to_string(name, attrs)}/>`)
+      }
+      res.push(`<${tag_head_to_string(name, attrs)}>`);
+      if (_name == 'body') {
         res.push(opt_out_link + opt_out_line)
       }
     }
@@ -234,19 +268,19 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
       }
       res.push(text);
     }
-    , onclosetag: (name) => {
-      if (skipTags.indexOf(name) != -1) {
+    , onclosetag: (name, noBody) => {
+      if (noBody) {
         return;
       }
-      if (name == 'body') {
-        res.push(opt_out_line + opt_out_link)
+      if (skipTags.indexOf(name.toLowerCase()) != -1) {
+        return;
       }
       res.push(`</${name}>`)
     }
   });
   const theme = (options && options.theme || 'default');
   res.push(ThemeStyles.get(theme));
-  if (options && options.article_mode) {
+  if (options && options.article_mode && '') {
     res.push(`<style>body *{display: none;} article *{display: initial;}</style>`);
     res.push(`<script>
 var es = document.getElementsByTagName('article');
