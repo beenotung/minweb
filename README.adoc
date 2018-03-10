@@ -1,0 +1,35 @@
+= min-web
+
+https://minweb.surge.sh[Minify Webpage]
+
+To read a webpage without over-bloated fancy stuff.
+
+== Features
+
+* [x] Text-Only Mode
+* [x] Article Mode
+* [x] No Script
+* [x] No Style
+* [x] No Image
+
+=== Color Themes
+
+. Default
+. Light
+. Dark
+. Console
+
+== Core Files
+
+|===
+| Filename | Desc
+
+| src/core.ts     | the core logic
+| pack            | build webtask version and copy into clipboard
+| webtask.js      | webtask version
+| tampermonkey.js | tampermonkey version
+|===
+
+== Reference
+
+https://runkit.com/jfahrenkrug/htmlparser2-demo/1.0.0[https://runkit.com/jfahrenkrug/htmlparser2-demo/1.0.0]
