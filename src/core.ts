@@ -61,6 +61,8 @@ function tag_to_string_article(tag: Tag): string {
       Tag_Article
       , 'head'
       , 'script'
+      , 'style'
+      , 'link'
     ])) {
     /* this is the article tag */
     return tag_to_string(tag);
@@ -118,9 +120,6 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
   if (!s || !s.trim()) {
     return '';
   }
-  if (options && options.text_mode) {
-    s = minifyHTML_textonly(s);
-  }
   if (options && options.article_mode) {
     console.error('before minifyHTML_article:' + s.length);
     s = minifyHTML_article(s);
@@ -128,6 +127,9 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
     console.error('>>>>');
     console.error(s);
     console.error('<<<<');
+  }
+  if (options && options.text_mode) {
+    s = minifyHTML_textonly(s);
   }
   const res = [];
   const skipTags: string[] = (options && options.skipTags) ? options.skipTags : [
