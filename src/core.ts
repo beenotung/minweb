@@ -46,7 +46,7 @@ function filter_textonly(topLevel: HTMLItem[]): HTMLItem[] {
       return res.push(item)
     }
     if (item_has_text(item)) {
-      res.push(item)
+      res.push(item);
       item.children = filter_textonly(item.children);
     }
   });
@@ -61,13 +61,7 @@ function filter_article(topLevel: HTMLItem[]): HTMLItem[] {
     if (item_is_tag(item, Tag_Article) || item_is_any_tag(item, tag_whitelist)) {
       return res.push(item);
     }
-    /*
-    console.error('before item_has_tag:', (item));
-    console.error('>>>>');
-    console.error(htmlItem_to_string(item));
-    console.error('<<<<');
-    */
-    if (item_has_tag(item, Tag_Article)) {
+    if (item_has_tag(item, Tag_Article) || tag_whitelist.some(t => item_has_tag(item, t))) {
       res.push(item);
       item.children = filter_article(item.children);
     }
