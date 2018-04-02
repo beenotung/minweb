@@ -98,6 +98,35 @@ export interface HTMLParserOptions {
 }
 
 export function parseHTMLText(s: string, offset = 0, options: HTMLParserOptions): void {
+  for (; offset < s.length;) {
+    offset = parseSpace(s, offset);
+    const c = s[offset];
+    offset++;
+    switch (c) {
+      case '<': {
+        offset = parseSpace(s, offset);
+        if (s[offset] == '/') {
+          /* close */
+          let name: string;
+          [name, offset] = parseName(s, offset);
+          offset = parseC('>', s, offset);
+          options.onclosetag(name, false);
+          continue;
+        }
+        /* not close */
+        if (s[offset] == '!') {
+          /* command */
+
+        }
+        if (!is_name_char(c)) {
+
+        }
+      }
+    }
+  }
+}
+
+export function parseHTMLText_old(s: string, offset = 0, options: HTMLParserOptions): void {
   let tagName: string;
   main:
     for (; offset < s.length;) {
@@ -186,13 +215,25 @@ export function parseHTMLText(s: string, offset = 0, options: HTMLParserOptions)
         default: {
           /* textContent */
           const start = offset;
+          let end: number;
           if (tagName === 'script') {
-            for (; offset < s.length && !compare_str(s, offset, '</script>'); offset++) ;
+            const idx1 = s.indexOf('</script>', offset);
+            const idx2 = s.indexOf('</SCRIPT>', offset);
+            const idx = idx1 == -1 ? idx2
+              : idx2 == -1 ? idx1
+                : idx1 < idx2 ? idx1 : idx2;
+            if (idx == -1) {
+              end = s.length;
+            } else {
+              end = idx;
+            }
+            offset += '</script>'.length;
           } else {
-            for (; offset < s.length && s[offset] !== '<'; offset++) ;
+            end = s.indexOf('<', offset);
+            offset = end;
           }
           if (start != offset) {
-            const text = s.substring(start, offset);
+            const text = s.substring(start, end);
             options.ontext(text);
           }
         }
