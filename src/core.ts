@@ -134,9 +134,9 @@ function scanner_map_text(item: HTMLItem, f: (s: string) => string) {
   item.children.forEach(item => scanner_map_text(item, f));
 }
 
-function scanner_update_tag(item: HTMLItem, f: (tag: Tag) => void) {
+function scanner_update_tag(item: HTMLItem, f: (tag: Tag, item: HTMLItem) => void) {
   if (item.tag) {
-    f(item.tag)
+    f(item.tag, item)
   }
   item.children.forEach(item => scanner_update_tag(item, f));
 }
@@ -203,6 +203,26 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
       skipAttrs.push('class', 'id');
       skipAttrFs.push((name, value) => !name.startsWith('data-'));
     }
+  }
+  if (skipTags.indexOf('iframe') !== -1) {
+    topLevel.forEach(top => scanner_update_tag(top, (tag, item) => {
+      if (tag.name.toLowerCase() != 'iframe') {
+        return
+      }
+      tag.name = 'a';
+      const t = tag.attributes.find(x => x.name.toLowerCase() == 'src');
+      if (t) {
+        const src = t.value;
+        tag.attributes = [
+          {name: 'href', value: src}
+        ];
+        tag.noBody = false;
+        item.children = [{text: 'iframe: ' + src, children: []}];
+      } else {
+        tag.attributes = [];
+        item.children = [];
+      }
+    }));
   }
   topLevel = filter_skip_tag_attr(topLevel, skipTags, skipAttrs, skipAttrFs);
 
