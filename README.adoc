@@ -9,6 +9,7 @@ To read a webpage without over-bloated fancy stuff.
 * [x] Text-Only Mode
 * [x] Article Mode
 * [x] No Script
+* [x] No IFrame
 * [x] No Style
 * [x] No Image
 
