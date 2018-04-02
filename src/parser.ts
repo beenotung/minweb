@@ -122,7 +122,7 @@ export function parseHTMLText(s: string, offset = 0, options: HTMLParserOptions)
                   break;
                 }
               }
-              const text = s.substring(start, offset);
+              const text = s.substring(start, offset - 3);
               options.oncomment(text);
               continue main;
             }
@@ -245,6 +245,9 @@ export function parseHTMLTree(s: string): HTMLItem[] {
           'img'
           , 'br'
           , 'hr'
+          , 'meta'
+          , 'link'
+          , 'input'
         ].indexOf(name.toLowerCase()) !== -1) {
         /* this tag will never be closed (event) */
         c.tag.noBody = true;
