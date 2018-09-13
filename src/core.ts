@@ -37,6 +37,7 @@ function filter_textonly(topLevel: HTMLItem[]): HTMLItem[] {
         , 'button'
         , 'img'
         , 'video'
+        , 'svg'
       ])) {
       return;
     }
@@ -176,6 +177,7 @@ const defaultSkipTags: string[] = [
   // , 'style'
   // , 'link'
   , 'img'
+  , 'svg'
 ];
 
 export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
