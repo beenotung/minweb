@@ -47,6 +47,7 @@ function checkKey(event){
 <tr><td><label for="text_mode">Text Mode</label></td><td><input name="text_mode" type="checkbox"></td></tr>
 <tr><td><label for="article_mode">Article Mode</label></td><td><input name="article_mode" type="checkbox"></td></tr>
 <tr><td><label for="no_script">No Script</label></td><td><input name="no_script" type="checkbox" checked></td></tr>
+<tr><td><label for="no_iframe">No IFrame</label></td><td><input name="no_iframe" type="checkbox" checked></td></tr>
 <tr><td><label for="no_style">No Style</label></td><td><input name="no_style" type="checkbox"></td></tr>
 <tr><td><label for="no_img">No Image</label></td><td><input name="no_img" type="checkbox"></td></tr>
 </tbody>
@@ -61,6 +62,7 @@ function go(){
     + getOption('text_mode')
     + getOption('article_mode')
     + getOption('no_script')
+    + getOption('no_iframe')
     + getOption('no_style')
     + getOption('no_img')
     + "&url=" + document.getElementsByName('url')[0].value;
@@ -98,6 +100,8 @@ function handleProxy(context, req: Request, res: Response) {
         options.text_mode = true;
       } else if (url.startsWith('article_mode=true')) {
         options.article_mode = true;
+      } else if (url.startsWith('no_iframe=true')) {
+        skipTags.push("iframe");
       } else if (url.startsWith('no_script=true')) {
         skipTags.push("script");
       } else if (url.startsWith('no_style=true')) {
