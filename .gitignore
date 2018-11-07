@@ -1,9 +1,10 @@
 node_modules/
+package-lock.json
+yarn.lock
 .last
 *.log
 log
 out.html
 dist/
 webtask.js
-yarn.lock
 in.html
