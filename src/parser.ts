@@ -307,7 +307,7 @@ export const htmlItem_to_string = (x: HTMLItem): string =>
 ;
 export const htmlItem_to_string_no_comment = (x: HTMLItem): string =>
   'command' in x ? `<!${tag_head_to_string(x.command.name, x.command.attributes)}>`
-    : 'comment in x' ? ''
+    : 'comment' in x ? ''
     : 'tag' in x ? '<' + tag_head_to_string(x.tag.name, x.tag.attributes) + (x.tag.noBody && x.children.length === 0 ? '/>' : '>' + x.children.map(htmlItem_to_string_no_comment).join('') + `</${x.tag.name}>`)
       : 'text' in x ? x.text
         : (() => {
