@@ -92,7 +92,7 @@ export interface HTMLParserOptions {
 
   onopentag(name: string, attributes: Attribute[], noBody: boolean);
 
-  ontext (text: string);
+  ontext(text: string);
 
   onclosetag(name: string, noBody: boolean);
 }
@@ -242,13 +242,13 @@ export function parseHTMLTree(s: string): HTMLItem[] {
         topLevel.push(c);
       }
       if (!noBody && [
-          'img'
-          , 'br'
-          , 'hr'
-          , 'meta'
-          , 'link'
-          , 'input'
-        ].indexOf(name.toLowerCase()) !== -1) {
+        'img'
+        , 'br'
+        , 'hr'
+        , 'meta'
+        , 'link'
+        , 'input'
+      ].indexOf(name.toLowerCase()) !== -1) {
         /* this tag will never be closed (event) */
         c.tag.noBody = true;
         return;
@@ -296,20 +296,20 @@ export const tag_head_to_string = (name: string, attributes: Attribute[]): strin
   name + (attributes.length === 0 ? '' : ' ' + attrsToString(attributes));
 
 export const htmlItem_to_string = (x: HTMLItem): string =>
-  x.command ? `<!${tag_head_to_string(x.command.name, x.command.attributes)}>`
-    : x.comment ? `<!--${x.comment}-->`
-    : x.tag ? '<' + tag_head_to_string(x.tag.name, x.tag.attributes) + (x.tag.noBody && x.children.length === 0 ? '/>' : '>' + x.children.map(htmlItem_to_string).join('') + `</${x.tag.name}>`)
-      : x.text ? x.text
+  'command' in x ? `<!${tag_head_to_string(x.command.name, x.command.attributes)}>`
+    : 'comment' in x ? `<!--${x.comment}-->`
+    : 'tag' in x ? '<' + tag_head_to_string(x.tag.name, x.tag.attributes) + (x.tag.noBody && x.children.length === 0 ? '/>' : '>' + x.children.map(htmlItem_to_string).join('') + `</${x.tag.name}>`)
+      : 'text' in x ? x.text
         : (() => {
           console.error('unknown html item:', x);
           throw new Error('unknown html item:' + JSON.stringify(x))
         })()
 ;
 export const htmlItem_to_string_no_comment = (x: HTMLItem): string =>
-  x.command ? `<!${tag_head_to_string(x.command.name, x.command.attributes)}>`
-    : x.comment ? ''
-    : x.tag ? '<' + tag_head_to_string(x.tag.name, x.tag.attributes) + (x.tag.noBody && x.children.length === 0 ? '/>' : '>' + x.children.map(htmlItem_to_string_no_comment).join('') + `</${x.tag.name}>`)
-      : x.text ? x.text
+  'command' in x ? `<!${tag_head_to_string(x.command.name, x.command.attributes)}>`
+    : 'comment in x' ? ''
+    : 'tag' in x ? '<' + tag_head_to_string(x.tag.name, x.tag.attributes) + (x.tag.noBody && x.children.length === 0 ? '/>' : '>' + x.children.map(htmlItem_to_string_no_comment).join('') + `</${x.tag.name}>`)
+      : 'text' in x ? x.text
         : (() => {
           console.error('unknown html item:', x);
           throw new Error('unknown html item:' + JSON.stringify(x))
