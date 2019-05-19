@@ -23,7 +23,7 @@ const body_to_html = (body: string) => `<!DOCTYPE html>
   <meta name="format-detection" content="telephone=no">
   <meta name="msapplication-tap-highlight" content="no">
 </head>
-<${body}>
+${body}
 </html>`;
 
 function handleUI(context, req: Request, res: Response) {
