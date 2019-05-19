@@ -50,6 +50,7 @@ function checkKey(event){
 <tr><td><label for="no_iframe">No IFrame</label></td><td><input name="no_iframe" type="checkbox" checked></td></tr>
 <tr><td><label for="no_style">No Style</label></td><td><input name="no_style" type="checkbox"></td></tr>
 <tr><td><label for="no_img">No Image</label></td><td><input name="no_img" type="checkbox"></td></tr>
+<tr><td><label for="inject_style">Readable Enhancement</label></td><td><input name="inject_style" type="checkbox"></td></tr>
 </tbody>
 </table>
 <script>
@@ -65,6 +66,7 @@ function go(){
     + getOption('no_iframe')
     + getOption('no_style')
     + getOption('no_img')
+    + getOption('inject_style')
     + "&url=" + document.getElementsByName('url')[0].value;
     ;
 }
@@ -98,6 +100,8 @@ function handleProxy(context, req: Request, res: Response) {
         options.theme = url.split('&')[0].replace('theme=', '') as Theme;
       } else if (url.startsWith('text_mode=true')) {
         options.text_mode = true;
+      } else if (url.startsWith('inject_style=true')) {
+        options.inject_style = true;
       } else if (url.startsWith('article_mode=true')) {
         options.article_mode = true;
       } else if (url.startsWith('no_iframe=true')) {

@@ -170,6 +170,7 @@ export interface MinifyHTMLOptions {
   hrefPrefix?: string
   article_mode?: boolean
   text_mode?: boolean
+  inject_style?: boolean
 }
 
 const defaultSkipTags: string[] = [
