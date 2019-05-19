@@ -335,6 +335,9 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
           , ...optOutLink
         ]
       }
+      if(options.inject_style){
+        body.children.push(...parseHTMLTree('<link rel="stylesheet" href="https://unpkg.com/sakura.css/css/sakura.css" type="text/css">'))
+      }
     })
   }
   // res.push(`<script>document.baseURI='${hrefPrefix}'</script>`);
