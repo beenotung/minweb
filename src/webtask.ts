@@ -13,7 +13,18 @@ export interface Response {
 const htmlHeader = {
   "Content-Type": "text/html"
 };
-const body_to_html = (body: string) => `<html><head><meta charset="UTF-8"><title>Minify Webpage</title></head>${body}</html>`;
+const body_to_html = (body: string) => `<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <title>Minify Web Page</title>
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="msapplication-tap-highlight" content="no">
+</head>
+<${body}>
+</html>`;
 
 function handleUI(context, req: Request, res: Response) {
   res.writeHead(200, htmlHeader);
