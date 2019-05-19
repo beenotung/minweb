@@ -450,7 +450,7 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
             '<link rel="stylesheet" href="https://unpkg.com/normalize.css@8.0.1/normalize.css" type="text/css">',
           ),
           ...parseHTMLTree(
-            '<link rel="stylesheet" href="https://unpkg.com/sakura.css/css/sakura.css" type="text/css">',
+            '<link rel="stylesheet" href="https://unpkg.com/@beenotung/sakura.css/css/sakura.css" type="text/css">',
           ),
         );
       });
