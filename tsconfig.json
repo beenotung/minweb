@@ -12,15 +12,14 @@
       "dom",
       "es2015"
     ],
+    "downlevelIteration": false,
     "module": "commonjs",
     "moduleResolution": "node",
     "target": "es5",
     "outDir": "dist"
   },
   "include": [
-    "src/**/*.ts",
-    "src/index.ts",
-    "src/index/index.ts"
+    "src/**/*.ts"
   ],
   "exclude": [
     "node_modules"
