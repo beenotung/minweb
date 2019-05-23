@@ -403,7 +403,8 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
     });
 
     if (options.inject_style) {
-      const mobileTopLevel = parseHTMLTree(`<!DOCTYPE html>
+      const mobileTopLevel = parseHTMLTree(
+        `<!DOCTYPE html>
 <html lang="en" dir="ltr">
 <head>
   <meta charset="UTF-8">
@@ -414,7 +415,8 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
 </head>
 <body>
 </body>
-</html>`);
+</html>`.replace(/\n/g, ''),
+      );
       const [doctype, html] = mobileTopLevel;
       const [head] = html.children;
 
@@ -427,8 +429,12 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
         );
       }
 
-      find_or_inject_tag(topLevel, 'html', item =>
-        addAttributes(item.tag.attributes, html.tag.attributes),
+      find_or_inject_tag(
+        topLevel,
+        'html',
+        item =>
+          ((console.log({ html }) as any) && false) ||
+          addAttributes(item.tag.attributes, html.tag.attributes),
       );
 
       find_or_inject_tag(topLevel, 'head', item => {
