@@ -4,4 +4,5 @@ location.href=location.href.indexOf('url=')!==-1
 ?location.href.substring(location.href.indexOf('url=')+'url='.length)
 :location.href.replace(location.origin,'').replace('/minWeb/','')
 ">Opt-Out</a></div>`
-  .split('\n').join('');
+  .split('\n')
+  .join('');

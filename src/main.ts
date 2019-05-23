@@ -1,8 +1,8 @@
 // import * as fetch from "isomorphic-fetch"
 // let fetch = require("isomorphic-fetch").fetch;
-import {minifyHTML, MinifyHTMLOptions} from "./core";
+import { minifyHTML, MinifyHTMLOptions } from './core';
 
-const fetch = require("node-fetch");
+const fetch = require('node-fetch');
 
 function checkUrl(s: string): string {
   for (let i = s.length - 1; i >= 0; i--) {
@@ -13,9 +13,13 @@ function checkUrl(s: string): string {
   return s;
 }
 
-export async function main(url: string, options?: MinifyHTMLOptions, htmlWatcher?: (s: string) => void) {
+export async function main(
+  url: string,
+  options?: MinifyHTMLOptions,
+  htmlWatcher?: (s: string) => void,
+) {
   if (!options) {
-    options = {url}
+    options = { url };
   } else {
     options.url = url;
   }
@@ -25,11 +29,12 @@ export async function main(url: string, options?: MinifyHTMLOptions, htmlWatcher
       if (htmlWatcher) {
         htmlWatcher(s);
       }
-      return minifyHTML(s, options)
-        + `\n<!--- url=${url} chars=${s.length} -->`
+      return (
+        minifyHTML(s, options) + `\n<!--- url=${url} chars=${s.length} -->`
+      );
     })
     .catch(e => {
       console.error(e);
-      return Promise.reject(e)
-    })
+      return Promise.reject(e);
+    });
 }
