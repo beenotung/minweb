@@ -13,6 +13,14 @@ export class ObjectMap<K extends PropertyKey, V> {
 
 export const arrayHas = <A>(xs: A[], x: A): boolean => xs.indexOf(x) !== -1;
 export const arrayHasAll = <A>(xs: A[], patterns: A[]) => patterns.every(x => arrayHas(xs, x));
+export const arrayFindOrPushThenConsume = <A>(xs: A[], pred: (a: A) => boolean, gen: () => A, consume: (a: A) => void): void => {
+  let matched = xs.filter(pred);
+  if (matched.length === 0) {
+    matched = [gen()];
+    xs.push(...matched);
+  }
+  matched.forEach(consume);
+};
 
 /**
  * @description avoid using this costly method, use offset instead

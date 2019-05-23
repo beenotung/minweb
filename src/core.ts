@@ -1,4 +1,5 @@
 import {HTMLItem, htmlItem_to_string_no_comment, parseHTMLTree, Tag} from "./parser";
+import {Attribute} from './parser';
 import {TextDecorator, Theme, ThemeStyles} from "./theme";
 import {opt_out_line, opt_out_link} from "./opt-out";
 
@@ -12,10 +13,13 @@ const item_has_text = (item: HTMLItem): boolean =>
   !!item.text || item.children.some(item_has_text);
 
 const item_has_tag = (item: HTMLItem, name: string): boolean =>
-  (item.tag && item.tag.name.toLowerCase() == name) || item.children.some(item => item_has_tag(item, name));
+  (item.tag && item.tag.name.toLowerCase() == name.toLowerCase()) || item.children.some(item => item_has_tag(item, name));
+
+const item_is_command = (item: HTMLItem, name: string): boolean =>
+  item.command && item.command.name.toLowerCase() == name.toLowerCase();
 
 const item_is_tag = (item: HTMLItem, name: string): boolean =>
-  item.tag && item.tag.name.toLowerCase() == name;
+  item.tag && item.tag.name.toLowerCase() == name.toLowerCase();
 
 const item_is_any_tag = (item: HTMLItem, names: string[]): boolean =>
   item.tag && names.indexOf(item.tag.name.toLowerCase()) !== -1;
@@ -119,6 +123,23 @@ function find_tag(topLevel: HTMLItem[], tagName: string): HTMLItem[] {
   return res;
 }
 
+function find_or_inject_tag(topLevel: HTMLItem[], tagName: string, f: (item: HTMLItem) => void, mode: 'push' | 'unshift' = 'push'): void {
+  let matched=find_tag(topLevel,tagName);
+  if(matched.length===0){
+    let item:HTMLItem={
+      tag:{
+        name:tagName,
+        attributes:[],
+        noBody:true
+      },
+      children:[]
+    }
+    matched=[item];
+    if(mode==='push'){topLevel.push(item)}else if(mode==='unshift'){topLevel.unshift(item)}
+  }
+  matched.forEach(f);
+}
+
 function scanner_add_to_body(item: HTMLItem, preChildren: HTMLItem[], postChildren: HTMLItem[]) {
   if (item_is_tag(item, 'body')) {
     item.tag.noBody = false;
@@ -180,7 +201,24 @@ const defaultSkipTags: string[] = [
   , 'img'
   , 'svg'
 ];
-
+/**
+ * append or overwrite
+ * */
+function addAttributes(target:Attribute[],newAttrs:Attribute[]) {
+  for (let newAttr of newAttrs) {
+    let name=newAttr.name.toLowerCase();
+    let found=false;
+    target.forEach(x=>{
+      if(x.name.toLowerCase()===name){
+        found=true
+        x.value=newAttr.value
+      }
+    })
+    if(!found){
+      target.push(newAttr)
+    }
+  }
+}
 export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
   if (!s) {
     return ''
@@ -321,24 +359,60 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
     const themeStyle = parseHTMLTree(themeHTML);
     const optOutLink = parseHTMLTree(opt_out_link);
     const optOutLine = parseHTMLTree(opt_out_line);
-    find_tag(topLevel, 'body').forEach(body => {
-      if (body.tag.noBody) {
-        body.tag.noBody = false;
-        body.children.push(...optOutLink)
-      } else {
-        body.children = [
-          ...optOutLink
-          , ...optOutLine
-          , ...themeStyle
-          , ...body.children
-          , ...optOutLine
-          , ...optOutLink
+    find_or_inject_tag(topLevel,'body',body=>{
+      body.tag.noBody=false;
+      if(body.children.length===0){
+        body.children=[
+          ...optOutLink,
+        ];
+      }else{
+        body.children=[
+          ...optOutLink,
+          ...optOutLine,
+          ...themeStyle,
+          ...body.children,
+          ...optOutLine,
+          ...optOutLink,
         ]
       }
-      if(options.inject_style){
-        body.children.push(...parseHTMLTree('<link rel="stylesheet" href="https://unpkg.com/sakura.css/css/sakura.css" type="text/css">'))
+    });
+
+
+    if (options.inject_style) {
+      let mobileTopLevel = parseHTMLTree(`<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="msapplication-tap-highlight" content="no">
+</head>
+<body>
+</body>
+</html>`);
+      let [doctype,html]=mobileTopLevel;
+      let [head]=html.children;
+
+      if(!item_is_command(topLevel[0],'DOCTYPE')){
+        topLevel.unshift(doctype)
+      }else{
+        addAttributes(topLevel[0].command.attributes,doctype.command.attributes)
       }
-    })
+
+      find_or_inject_tag(topLevel,'html',item=>addAttributes(item.tag.attributes,html.tag.attributes),);
+
+      find_or_inject_tag(topLevel,'head',item=>{
+        item.children=[...head.children,...item.children]
+        item.tag.noBody=false
+        item.children.push(...parseHTMLTree(``))
+      });
+
+      find_or_inject_tag(topLevel,'body',item=>{
+        item.tag.noBody=false
+        item.children.push(...parseHTMLTree('<link rel="stylesheet" href="https://unpkg.com/sakura.css/css/sakura.css" type="text/css">'));
+      })
+    }
   }
   // res.push(`<script>document.baseURI='${hrefPrefix}'</script>`);
   return topLevel.map(htmlItem_to_string_no_comment).join('');
