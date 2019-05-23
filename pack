@@ -12,7 +12,7 @@ cat dist/core.js >> "$tmp"
 cat dist/main.js >> "$tmp"
 cat dist/webtask.js >> "$tmp"
 cat "$tmp" \
-  | grep -v 'import { .* } from "\./.*";' \
+  | grep -v $'import { .* } from \'\./.*\';' \
   | sed 's/^export //' \
   > "$out"
 rm "$tmp"
