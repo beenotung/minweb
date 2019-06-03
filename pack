@@ -2,7 +2,7 @@
 set -e
 tmp="tmp.$RANDOM.js"
 out="webtask.js"
-tsc -p tsconfig.webtask.json
+npx tsc -p tsconfig.webtask.json
 rm -f "$tmp"
 cat dist/parser.js >> "$tmp"
 cat dist/utils.js >> "$tmp"
@@ -17,3 +17,4 @@ cat "$tmp" \
   > "$out"
 rm "$tmp"
 cat "$out" | xclip -sel clipboard
+echo "saved to clipboard."
