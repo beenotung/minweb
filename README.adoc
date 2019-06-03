@@ -4,6 +4,9 @@ https://minweb.surge.sh[Minify Webpage]
 
 To read a webpage without over-bloated fancy stuff.
 
+== TODO
+* [ ] fix missing char bug in demo/link.html
+
 == Features
 
 * [x] Text-Only Mode
