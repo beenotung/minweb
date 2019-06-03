@@ -34,6 +34,7 @@ function handleUI(context, req: Request, res: Response) {
   res.end(
     body_to_html(`<body>
 </body><h1>Minify Webpage</h1>
+<noscript><p style="color: red">Javascript is required for this form to work.</p></noscript>
 
 <a href="https://github.com/beenotung/minweb">
   <img style="position: absolute; top: 0; right: 0; border: 0;"
