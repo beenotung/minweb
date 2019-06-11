@@ -1,7 +1,0 @@
-#!/bin/bash
-set -e
-test -z "$src" && src="src/test.ts"
-ts-node "$src" 2> >(tee err.log >&2) | tee out.log
-if [ "$src" == "src/test.ts" ]; then
-  cp out.log out.html
-fi
