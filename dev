@@ -1,0 +1,4 @@
+#!/bin/bash
+set -e
+set -o pipefail
+ts-node test/core-test.ts 2>&1 | tee log.html

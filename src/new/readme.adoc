@@ -1,0 +1,22 @@
+== core progress
+re-implement
+
+handle: parse and encode
+
+- [x] text
+- [x] normal element
+- [x] command
+- [x] short-closed elements
+- [ ] comment
+- [ ] not properly closed elements, e.g. li, td
+- [ ] style
+- [ ] script
+
+== todo
+- [ ] support filtering features
+   * [ ] text-only
+   * [ ] article mode
+   * [ ] no script
+   * [ ] no iframe
+   * [ ] no style
+   * [ ] no image
