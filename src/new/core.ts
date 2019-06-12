@@ -11,7 +11,7 @@ interface ParseResult<T> {
 }
 
 abstract class Node {
-  textContent: string;
+  outerHTML: string;
   childNodes: Node[] = [];
 }
 
@@ -62,7 +62,7 @@ class Text extends Node {
       }
     });
     const node = new Text();
-    node.textContent = acc;
+    node.outerHTML = acc;
     return {
       res,
       data: node,
@@ -157,7 +157,7 @@ class Attributes extends Node {
   // to preserve spaces
   data: Array<Attr | string> = [];
 
-  get textContent(): string {
+  get outerHTML(): string {
     let html = '';
     this.data.forEach(attrOrSpace => {
       if (typeof attrOrSpace === 'string') {
@@ -217,6 +217,7 @@ function noBody(tagName: string) {
     case 'input':
     case 'meta':
     case 'img':
+    case 'link':
       return true;
     default:
       return false;
@@ -228,15 +229,15 @@ class HTMLElement extends Node {
   noBody = false;
   attributes: Attributes;
 
-  get textContent(): string {
+  get outerHTML(): string {
     let html = `<${this.tagName}`;
-    html += this.attributes.textContent;
+    html += this.attributes.outerHTML;
     if (this.noBody) {
       html += '/>';
       return html;
     }
     html += '>';
-    this.childNodes.forEach(node => (html += node.textContent));
+    this.childNodes.forEach(node => (html += node.outerHTML));
     if (!noBody(this.tagName)) {
       html += `</${this.tagName}>`;
     }
@@ -310,9 +311,9 @@ class Command extends HTMLElement {
     this.noBody = true;
   }
 
-  get textContent(): string {
+  get outerHTML(): string {
     let html = `<!${this.tagName}`;
-    html += this.attributes.textContent;
+    html += this.attributes.outerHTML;
     html += `>`;
     return html;
   }
@@ -338,20 +339,62 @@ class Command extends HTMLElement {
   }
 }
 
+class Comment extends Command {
+  content: string;
+
+  get outerHTML(): string {
+    return `<!--${this.content}-->`;
+  }
+
+  static parse(html: string): ParseResult<Comment> {
+    assert(html[0] === '<', `expect open comment tag ${s('<')}`);
+    assert(html[1] === '!', `expect open comment prefix ${s('!')}`);
+    assert(html[2] === '-', `expect open comment prefix ${s('-')}`);
+    assert(html[3] === '-', `expect open comment prefix ${s('-')}`);
+    html = html.substr(4);
+    let acc = '';
+    const { res } = forChar(html, (c, i, html) => {
+      switch (c) {
+        case '-':
+          // if (html.startsWith('-->', i)) {
+          if (html[i + 1] === '-' && html[i + 2] === '>') {
+            return 'stop';
+          }
+          acc += c;
+          break;
+        default:
+          acc += c;
+      }
+    });
+    html = res;
+    assert(html[0] === '-', `expect close comment suffix ${s('-')}`);
+    assert(html[1] === '-', `expect close comment suffix ${s('-')}`);
+    assert(html[2] === '>', `expect close comment suffix ${s('>')}`);
+    html = html.substr(3);
+    const comment = new Comment();
+    comment.content = acc;
+    return { res: html, data: comment };
+  }
+}
+
 class Document extends HTMLElement {
-  get textContent(): string {
-    return this.childNodes.map(node => node.textContent).join('');
+  get outerHTML(): string {
+    return this.childNodes.map(node => node.outerHTML).join('');
   }
 
   static parse(html: string): ParseResult<Node> {
-    // console.log('parse document:', s(html.substr(0, 3)));
     if (html[0] === '<') {
       if (html[1] === '!') {
+        if (html[2] === '-' && html[2] === '-') {
+          return parse(Comment, html);
+        }
+        // not '<!--'
         return parse(Command, html);
-      } else {
-        return parse(HTMLElement, html);
       }
+      // not '<!'
+      return parse(HTMLElement, html);
     }
+    // not '<'
     return parse(Text, html);
   }
 }

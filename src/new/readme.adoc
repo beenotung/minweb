@@ -7,7 +7,7 @@ handle: parse and encode
 - [x] normal element
 - [x] command
 - [x] short-closed elements
-- [ ] comment
+- [x] comment
 - [ ] not properly closed elements, e.g. li, td
 - [ ] style
 - [ ] script

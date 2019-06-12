@@ -10,7 +10,7 @@ function test(html: string) {
 
   const root = parseHtml(html);
 
-  let restructuredHtml = root.textContent;
+  let restructuredHtml = root.outerHTML;
   if (restructuredHtml !== html) {
     console.log('not matched');
     console.log();
@@ -42,4 +42,5 @@ function testFile(filename: string) {
 // testUrl('http://yahoo.hk');
 // testUrl('https://www.forbes.com/sites/jennifercohen/2014/06/18/5-proven-methods-for-gaining-self-discipline/');
 // testFile('demo/link.html');
-testFile('demo/mobile.html');
+// testFile('demo/mobile.html');
+testFile('demo/comment.html');
