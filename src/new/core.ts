@@ -1,9 +1,11 @@
 export let config = {
   dev: false,
   debug: false,
+  autoRepair: false,
 };
 // config.dev = true;
 // config.debug = true;
+// config.autoRepair = true;
 
 interface ParseResult<T> {
   res: string;
@@ -228,6 +230,8 @@ class HTMLElement extends Node {
   tagName: string;
   noBody = false;
   attributes: Attributes;
+  /* auto repair */
+  notClosed = true;
 
   get outerHTML(): string {
     let html = `<${this.tagName}`;
@@ -238,7 +242,7 @@ class HTMLElement extends Node {
     }
     html += '>';
     this.childNodes.forEach(node => (html += node.outerHTML));
-    if (!noBody(this.tagName)) {
+    if (!noBody(this.tagName) && (config.autoRepair || !this.notClosed)) {
       html += `</${this.tagName}>`;
     }
     return html;
@@ -280,6 +284,7 @@ class HTMLElement extends Node {
           const selfCloseTagHtml = `</${node.tagName}>`;
           if (html.startsWith(selfCloseTagHtml)) {
             // normal close
+            node.notClosed = false;
             html = html.substr(selfCloseTagHtml.length);
             break;
           } else {

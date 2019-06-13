@@ -43,4 +43,5 @@ function testFile(filename: string) {
 // testUrl('https://www.forbes.com/sites/jennifercohen/2014/06/18/5-proven-methods-for-gaining-self-discipline/');
 // testFile('demo/link.html');
 // testFile('demo/mobile.html');
-testFile('demo/comment.html');
+// testFile('demo/comment.html');
+testFile('demo/not-closed.html');
