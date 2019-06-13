@@ -10,7 +10,7 @@ handle: parse and encode
 - [x] comment
 - [x] not properly closed elements, e.g. li, td
 - [x] style
-- [ ] script
+- [x] script
 
 == todo
 - [ ] support filtering features

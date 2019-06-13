@@ -261,9 +261,9 @@ function parseHTMLElementHead(html: string): ParseResult<HTMLElement> {
 function parseHTMLElementTail(
   html: string,
   node: HTMLElement,
+  closeTagHTML: string,
 ): ParseResult<void> {
   assert(html[0] === '<', 'expect tag close bracket');
-  const closeTagHTML = `</${node.tagName}>`;
   // TODO support edge case of different cases of opening and closing (e.g. <p></P>)
   if (html.startsWith(closeTagHTML)) {
     // normal close
@@ -308,6 +308,9 @@ class HTMLElement extends Node {
     }
     if (node.tagName.toLowerCase() === 'style') {
       return continueParseStyleFromHTMLElement(html, node);
+    }
+    if (node.tagName.toLowerCase() === 'script') {
+      return continueParseScriptFromHTMLElement(html, node);
     }
     if (noBody(node.tagName)) {
       return { res: html, data: node };
@@ -436,7 +439,10 @@ function parseStyleComment(html: string): ParseResult<string> {
   return { res: html.substr(2), data: acc };
 }
 
-function parseStyleBody(html: string): ParseResult<string> {
+function parseStyleBody(
+  html: string,
+  closeTagHTML: string,
+): ParseResult<string> {
   let acc = '';
   const { res } = forChar(html, (c, i, html) => {
     if (c === '/' && html[i + 1] === '*') {
@@ -444,7 +450,8 @@ function parseStyleBody(html: string): ParseResult<string> {
       acc += '/*' + data + '*/';
       return { res };
     }
-    if (html.toLowerCase().startsWith('</style>', i)) {
+    // TODO support edge case of different cases, e.g. <style></STYLE>
+    if (html.startsWith(closeTagHTML, i)) {
       return 'stop';
     }
     acc += c;
@@ -452,7 +459,7 @@ function parseStyleBody(html: string): ParseResult<string> {
   return { res, data: acc };
 }
 
-class Style extends HTMLElement {
+abstract class DSLELement extends HTMLElement {
   textContent: string;
 
   get outerHTML(): string {
@@ -469,6 +476,8 @@ class Style extends HTMLElement {
   }
 }
 
+class Style extends DSLELement {}
+
 function continueParseStyleFromHTMLElement(
   html: string,
   node: HTMLElement,
@@ -478,22 +487,89 @@ function continueParseStyleFromHTMLElement(
   if (style.noBody) {
     return { res: html, data: style };
   }
+  const closeTagHTML = `</${node.tagName}>`;
   {
-    const { res, data } = parseStyleBody(html);
+    const { res, data } = parseStyleBody(html, closeTagHTML);
     style.textContent = data;
     html = res;
   }
   {
-    const { res } = parseHTMLElementTail(html, style);
+    const { res } = parseHTMLElementTail(html, style, closeTagHTML);
     html = res;
   }
   return { res: html, data: style };
 }
 
-// class Script extends HTMLElement {
-//   static parse(html: string): ParseResult<Style> {
-//   }
-// }
+class Script extends DSLELement {}
+
+function parseScriptBody(
+  html: string,
+  closeTagHTML: string,
+): ParseResult<string> {
+  let acc = '';
+  const { res } = forChar(html, (c, i, html) => {
+    switch (c) {
+      case '"':
+      case "'": {
+        const { res, data } = parseString(html.substr(i), c);
+        acc += data;
+        return { res };
+      }
+      case '/': {
+        if (html[i + 1] === '/') {
+          // single line comment
+          html = html.substr(i + 2);
+          let end = html.indexOf('\n');
+          if (end === -1) {
+            end = html.length;
+          }
+          acc += '//' + html.substring(0, end);
+          return { res: html.substr(end) };
+        }
+        if (html[i + 1] === '*') {
+          // multiple line comment
+          html = html.substring(i + 2);
+          let end = html.indexOf('*/');
+          if (end === -1) {
+            end = html.length;
+          }
+          acc += '/*' + html.substring(0, end) + '*/';
+          return { res: html.substring(end + 2) };
+        }
+        acc += c;
+        break;
+      }
+      default:
+        if (html.startsWith(closeTagHTML, i)) {
+          return 'stop';
+        }
+        acc += c;
+    }
+  });
+  return { res, data: acc };
+}
+
+function continueParseScriptFromHTMLElement(
+  html: string,
+  node: HTMLElement,
+): ParseResult<Script> {
+  const script = new Script();
+  Object.assign(script, node);
+  if (script.noBody) {
+    return { res: html, data: script };
+  }
+  const closeTagHTML = `</${node.tagName}>`;
+  {
+    const { res, data } = parseScriptBody(html, closeTagHTML);
+    script.textContent = data;
+    html = res;
+  }
+  {
+    const { res } = parseHTMLElementTail(html, script, closeTagHTML);
+    html = res;
+  }
+  return { res: html, data: script };
+}
 
 class Document extends HTMLElement {
   get outerHTML(): string {

@@ -45,4 +45,5 @@ function testFile(filename: string) {
 // testFile('demo/mobile.html');
 // testFile('demo/comment.html');
 // testFile('demo/not-closed.html');
-testFile('demo/style.html');
+// testFile('demo/style.html');
+testFile('demo/script.html');
