@@ -14,7 +14,7 @@ interface ParseResult<T> {
 
 abstract class Node {
   outerHTML: string;
-  childNodes: Node[] = [];
+  childNodes?: Node[];
 }
 
 interface NodeConstructor<T extends Node> {
@@ -157,11 +157,11 @@ interface Attr {
 
 class Attributes extends Node {
   // to preserve spaces
-  data: Array<Attr | string> = [];
+  attrs: Array<Attr | string> = [];
 
   get outerHTML(): string {
     let html = '';
-    this.data.forEach(attrOrSpace => {
+    this.attrs.forEach(attrOrSpace => {
       if (typeof attrOrSpace === 'string') {
         const space: string = attrOrSpace;
         html += space;
@@ -176,6 +176,34 @@ class Attributes extends Node {
     });
     return html;
   }
+
+  hasName(name: string): boolean {
+    return this.attrs.some(
+      attr => typeof attr === 'object' && attr.name === name,
+    );
+  }
+
+  getValue(name: string): string | undefined {
+    const attr = this.attrs.find(
+      attr => typeof attr === 'object' && attr.name === name,
+    ) as Attr;
+    if (!attr) {
+      return;
+    }
+    const value = attr.value;
+    if (!value) {
+      return;
+    }
+    const c = value[0];
+    if (c === value[value.length - 1]) {
+      switch (c) {
+        case '"':
+        case "'":
+          return value.substring(1, value.length - 1);
+      }
+    }
+    return value;
+  }
 }
 
 function parseTagAttrs(html: string): ParseResult<Attributes> {
@@ -184,7 +212,7 @@ function parseTagAttrs(html: string): ParseResult<Attributes> {
     switch (c) {
       case ' ':
       case '\n':
-        attributes.data.push(c);
+        attributes.attrs.push(c);
         break;
       case '/':
       case '>':
@@ -205,7 +233,7 @@ function parseTagAttrs(html: string): ParseResult<Attributes> {
           attr.value = data;
           html = res;
         }
-        attributes.data.push(attr);
+        attributes.attrs.push(attr);
         return { res: html };
       }
     }
@@ -220,6 +248,7 @@ function noBody(tagName: string) {
     case 'meta':
     case 'img':
     case 'link':
+    case 'base':
       return true;
     default:
       return false;
@@ -272,6 +301,9 @@ function parseHTMLElementTail(
   } else {
     // auto repair close
     node.notClosed = true;
+    if (config.debug) {
+      console.log('auto repair:', node);
+    }
   }
   return { res: html, data: void 0 };
 }
@@ -291,7 +323,7 @@ class HTMLElement extends Node {
       return html;
     }
     html += '>';
-    this.childNodes.forEach(node => (html += node.outerHTML));
+    (this.childNodes || []).forEach(node => (html += node.outerHTML));
     if (!noBody(this.tagName) && (config.autoRepair || !this.notClosed)) {
       html += `</${this.tagName}>`;
     }
@@ -315,6 +347,7 @@ class HTMLElement extends Node {
     if (noBody(node.tagName)) {
       return { res: html, data: node };
     }
+    node.childNodes = [];
     for (; html.length > 0; ) {
       const c = html[0];
       if (c === '<') {
@@ -329,6 +362,10 @@ class HTMLElement extends Node {
             break;
           } else {
             // auto repair close
+            node.notClosed = true;
+            if (config.debug) {
+              console.log('auto repair:', node);
+            }
             break;
           }
         } else {
@@ -549,6 +586,20 @@ function parseScriptBody(
   return { res, data: acc };
 }
 
+function parseJSONScriptBody(
+  html: string,
+  closeTagHTML: string,
+): ParseResult<string> {
+  // TODO escape string
+  let end = html.indexOf(closeTagHTML);
+  if (end === -1) {
+    end = html.length;
+  }
+  const acc = html.substr(0, end);
+  const res = html.substr(end);
+  return { res, data: acc };
+}
+
 function continueParseScriptFromHTMLElement(
   html: string,
   node: HTMLElement,
@@ -559,7 +610,14 @@ function continueParseScriptFromHTMLElement(
     return { res: html, data: script };
   }
   const closeTagHTML = `</${node.tagName}>`;
-  {
+  if (
+    script.attributes.hasName('type') &&
+    script.attributes.getValue('type') === 'application/json'
+  ) {
+    const { res, data } = parseJSONScriptBody(html, closeTagHTML);
+    script.textContent = data;
+    html = res;
+  } else {
     const { res, data } = parseScriptBody(html, closeTagHTML);
     script.textContent = data;
     html = res;
@@ -604,7 +662,7 @@ function parse<T extends Node>(
     console.log(prefix + 'enter context:', context.name);
   }
   if (config.debug) {
-    console.log('|>>>:html|', html, '|html:<<<|');
+    console.log('|>>>:html(first-10)|', html.substr(0, 10), '|html:<<<|');
     /*
     console.log({
       len: html.length,
@@ -621,7 +679,7 @@ function parse<T extends Node>(
     console.log(prefix + 'leave context:', context.name);
   }
   if (config.debug) {
-    console.log('|>>>:res|', res.res, '|res:<<<|');
+    console.log('|>>>:res(first-10)|', res.res.substr(0, 10), '|res:<<<|');
     console.log('|>>>:data|');
     logNode(res.data);
     console.log('|data:<<<|');
@@ -631,6 +689,7 @@ function parse<T extends Node>(
 
 export function parseHtml(html: string): HTMLElement {
   const root = new Document();
+  root.childNodes = [];
   for (; html.length > 0; ) {
     const c = html[0];
     const p = (context: NodeConstructor<any>) => {
@@ -652,19 +711,22 @@ export function parseHtml(html: string): HTMLElement {
   return root;
 }
 
-export function logNode(node: Node) {
-  function walkNode(node: Node) {
-    const constructor = ((node as any) as HTMLElement)
-      .constructor as NodeConstructor<any>;
-    const name = constructor.name;
-    return {
-      name,
-      node: {
-        ...node,
-        childNodes: node.childNodes.map(node => walkNode(node)),
-      },
-    };
-  }
+/* for debug */
+export function wrapNode(node: Node) {
+  const constructor = ((node as any) as HTMLElement)
+    .constructor as NodeConstructor<any>;
+  const name = constructor.name;
+  return {
+    name,
+    node: {
+      ...node,
+      childNodes: node.childNodes
+        ? node.childNodes.map(node => wrapNode(node))
+        : [],
+    },
+  };
+}
 
-  console.log(JSON.stringify(walkNode(node), null, 2));
+export function logNode(node: Node) {
+  console.log(JSON.stringify(wrapNode(node), null, 2));
 }

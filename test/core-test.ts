@@ -1,30 +1,47 @@
 import * as fs from 'fs';
-import { logNode, parseHtml } from '../src/new/core';
+import { parseHtml, wrapNode } from '../src/new/core';
 
 const fetch = require('node-fetch');
 
+const logTo = { console: false, file: true };
+
 function test(html: string) {
-  console.log('== input html ==');
-  console.log(html);
-  console.log('================');
+  if (logTo.console) {
+    console.log('== input html ==');
+    console.log(html);
+    console.log('================');
+  }
 
   const root = parseHtml(html);
+  const wrappedNode = wrapNode(root);
 
   const restructuredHtml = root.outerHTML;
   if (restructuredHtml !== html) {
     console.log('not matched');
-    console.log();
-    console.log('== restructured html ==');
-    console.log(restructuredHtml);
-    console.log('=======================');
+    if (logTo.file) {
+      fs.writeFileSync('in.html', html);
+      fs.writeFileSync('out.html', restructuredHtml);
+      fs.writeFileSync('out-in-len.html', restructuredHtml.substr(0, html.length));
+      fs.writeFileSync('out-extra.html', restructuredHtml.substr(html.length));
+      fs.writeFileSync('root.json', JSON.stringify(root, null, 2));
+      fs.writeFileSync('wrapped-root.json', JSON.stringify(wrappedNode, null, 2));
+    }
+    if (logTo.console) {
+      console.log();
+      console.log('== restructured html ==');
+      console.log(restructuredHtml);
+      console.log('=======================');
+    }
   } else {
     console.log('matched');
   }
 
-  console.log();
-  console.log('== parsed root == ');
-  logNode(root);
-  console.log('================= ');
+  if (logTo.console) {
+    console.log();
+    console.log('== parsed root == ');
+    console.log(JSON.stringify(wrappedNode, null, 2));
+    console.log('================= ');
+  }
   // const s2 = topLevel.map(htmlItem_to_string_no_comment).join('');
   // console.error(s2);
 }
@@ -41,9 +58,12 @@ function testFile(filename: string) {
 
 // testUrl('http://yahoo.hk');
 // testUrl('https://www.forbes.com/sites/jennifercohen/2014/06/18/5-proven-methods-for-gaining-self-discipline/');
-// testFile('demo/link.html');
+// testFile('demo/a.html');
 // testFile('demo/mobile.html');
 // testFile('demo/comment.html');
 // testFile('demo/not-closed.html');
 // testFile('demo/style.html');
-testFile('demo/script.html');
+// testFile('demo/script.html');
+// testFile('demo/link.html');
+// testFile('demo/link-compact.html');
+testFile('demo/json.html');

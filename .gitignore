@@ -10,3 +10,9 @@ dist/
 webtask.js
 in.html
 /log.html
+/in.html
+/out.html
+/out-in-len.html
+/out-extra.html
+/root.json
+/wrapped-root.json
