@@ -226,6 +226,56 @@ function noBody(tagName: string) {
   }
 }
 
+/**
+ * parse until the body of the element (not recursively)
+ * */
+function parseHTMLElementHead(html: string): ParseResult<HTMLElement> {
+  assert(html[0] === '<', 'expect tag open bracket');
+  html = html.substr(1);
+  /* tslint:disable:no-use-before-declare */
+  const node = new HTMLElement();
+  /* tslint:enable:no-use-before-declare */
+  {
+    const { res, data } = parseTagName(html);
+    node.tagName = data;
+    html = res;
+  }
+  {
+    const { res, data } = parseTagAttrs(html);
+    node.attributes = data;
+    html = res;
+  }
+  if (html.startsWith('/>')) {
+    node.noBody = true;
+    html = html.substr(2);
+    return { res: html, data: node };
+  }
+  // html starts with '>'
+  html = html.substr(1);
+  return { res: html, data: node };
+}
+
+/**
+ * start from end of body, must not be still inside open tag
+ * */
+function parseHTMLElementTail(
+  html: string,
+  node: HTMLElement,
+): ParseResult<void> {
+  assert(html[0] === '<', 'expect tag close bracket');
+  const closeTagHTML = `</${node.tagName}>`;
+  // TODO support edge case of different cases of opening and closing (e.g. <p></P>)
+  if (html.startsWith(closeTagHTML)) {
+    // normal close
+    node.notClosed = false;
+    html = html.substr(closeTagHTML.length);
+  } else {
+    // auto repair close
+    node.notClosed = true;
+  }
+  return { res: html, data: void 0 };
+}
+
 class HTMLElement extends Node {
   tagName: string;
   noBody = false;
@@ -249,35 +299,16 @@ class HTMLElement extends Node {
   }
 
   static parse(html: string): ParseResult<Node> {
-    const originalHtml = html;
-    assert(html[0] === '<', 'expect tag open bracket');
-    const node = new HTMLElement();
+    // const originalHtml = html;
+    let node: HTMLElement;
     {
-      const { res, data } = parseTagName(html.substr(1));
-      node.tagName = data;
-      if (node.tagName.toLowerCase() === 'style') {
-        /* tslint:disable:no-use-before-declare */
-        return Style.parse(originalHtml);
-        /* tslint:enable:no-use-before-declare */
-      }
+      const { res, data } = parseHTMLElementHead(html);
+      node = data;
       html = res;
     }
-    {
-      const { res, data } = parseTagAttrs(html);
-      node.attributes = data;
-      html = res;
+    if (node.tagName.toLowerCase() === 'style') {
+      return continueParseStyleFromHTMLElement(html, node);
     }
-    if (config.debug) {
-      console.log('parsing element body:');
-      console.log(s({ node, html }));
-    }
-    if (html.startsWith('/>')) {
-      node.noBody = true;
-      html = html.substr(2);
-      return { res: html, data: node };
-    }
-    // html starts with '>'
-    html = html.substr(1);
     if (noBody(node.tagName)) {
       return { res: html, data: node };
     }
@@ -436,48 +467,33 @@ class Style extends HTMLElement {
     html += `</${this.tagName}>`;
     return html;
   }
+}
 
-  static parse(html: string): ParseResult<Style> {
-    assert(html[0] === '<', 'expect style tag open bracket');
-    html = html.substr(1);
-    const style = new Style();
-    {
-      const { res, data } = parseTagName(html);
-      if (data.toLowerCase() !== 'style') {
-        throw new Error('expect style open tag');
-      }
-      style.tagName = data;
-      html = res;
-    }
-    {
-      const { res, data } = parseTagAttrs(html);
-      style.attributes = data;
-      html = res;
-    }
-    if (html.startsWith('/>')) {
-      style.noBody = true;
-      html = html.substr(2);
-      return { res: html, data: style };
-    }
-    // html starts with '>'
-    html = html.substr(1);
-    {
-      const { res, data } = parseStyleBody(html);
-      style.textContent = data;
-      html = res;
-    }
-    assert(html[0] === '<', 'expect style close tag');
-    if (html.startsWith('</style>')) {
-      // normal close
-      style.notClosed = false;
-      html = html.substr('</style>'.length);
-    } else {
-      // auto repair close
-      style.notClosed = true;
-    }
+function continueParseStyleFromHTMLElement(
+  html: string,
+  node: HTMLElement,
+): ParseResult<Style> {
+  const style = new Style();
+  Object.assign(style, node);
+  if (style.noBody) {
     return { res: html, data: style };
   }
+  {
+    const { res, data } = parseStyleBody(html);
+    style.textContent = data;
+    html = res;
+  }
+  {
+    const { res } = parseHTMLElementTail(html, style);
+    html = res;
+  }
+  return { res: html, data: style };
 }
+
+// class Script extends HTMLElement {
+//   static parse(html: string): ParseResult<Style> {
+//   }
+// }
 
 class Document extends HTMLElement {
   get outerHTML(): string {
