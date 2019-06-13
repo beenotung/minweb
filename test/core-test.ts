@@ -10,7 +10,7 @@ function test(html: string) {
 
   const root = parseHtml(html);
 
-  let restructuredHtml = root.outerHTML;
+  const restructuredHtml = root.outerHTML;
   if (restructuredHtml !== html) {
     console.log('not matched');
     console.log();
@@ -44,4 +44,5 @@ function testFile(filename: string) {
 // testFile('demo/link.html');
 // testFile('demo/mobile.html');
 // testFile('demo/comment.html');
-testFile('demo/not-closed.html');
+// testFile('demo/not-closed.html');
+testFile('demo/style.html');

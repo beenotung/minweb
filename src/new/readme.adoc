@@ -9,7 +9,7 @@ handle: parse and encode
 - [x] short-closed elements
 - [x] comment
 - [x] not properly closed elements, e.g. li, td
-- [ ] style
+- [x] style
 - [ ] script
 
 == todo

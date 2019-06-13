@@ -249,11 +249,17 @@ class HTMLElement extends Node {
   }
 
   static parse(html: string): ParseResult<Node> {
+    const originalHtml = html;
     assert(html[0] === '<', 'expect tag open bracket');
     const node = new HTMLElement();
     {
       const { res, data } = parseTagName(html.substr(1));
       node.tagName = data;
+      if (node.tagName.toLowerCase() === 'style') {
+        /* tslint:disable:no-use-before-declare */
+        return Style.parse(originalHtml);
+        /* tslint:enable:no-use-before-declare */
+      }
       html = res;
     }
     {
@@ -379,6 +385,97 @@ class Comment extends Command {
     const comment = new Comment();
     comment.content = acc;
     return { res: html, data: comment };
+  }
+}
+
+function parseStyleComment(html: string): ParseResult<string> {
+  assert(html[0] === '/', `expect start style comment prefix ${s('/')}`);
+  assert(html[1] === '*', `expect start style comment prefix ${s('*')}`);
+  html = html.substr(2);
+  let acc = '';
+  const { res } = forChar(html, (c, i, html) => {
+    if (c === '*' && html[i + 1] === '/') {
+      return 'stop';
+    }
+    acc += c;
+  });
+  html = res;
+  assert(html[0] === '*', `expect start style comment suffix ${s('*')}`);
+  assert(html[1] === '/', `expect start style comment suffix ${s('/')}`);
+  return { res: html.substr(2), data: acc };
+}
+
+function parseStyleBody(html: string): ParseResult<string> {
+  let acc = '';
+  const { res } = forChar(html, (c, i, html) => {
+    if (c === '/' && html[i + 1] === '*') {
+      const { res, data } = parseStyleComment(html.substr(i));
+      acc += '/*' + data + '*/';
+      return { res };
+    }
+    if (html.toLowerCase().startsWith('</style>', i)) {
+      return 'stop';
+    }
+    acc += c;
+  });
+  return { res, data: acc };
+}
+
+class Style extends HTMLElement {
+  textContent: string;
+
+  get outerHTML(): string {
+    let html = `<${this.tagName}`;
+    html += this.attributes.outerHTML;
+    if (this.noBody) {
+      html += '/>';
+      return html;
+    }
+    html += '>';
+    html += this.textContent;
+    html += `</${this.tagName}>`;
+    return html;
+  }
+
+  static parse(html: string): ParseResult<Style> {
+    assert(html[0] === '<', 'expect style tag open bracket');
+    html = html.substr(1);
+    const style = new Style();
+    {
+      const { res, data } = parseTagName(html);
+      if (data.toLowerCase() !== 'style') {
+        throw new Error('expect style open tag');
+      }
+      style.tagName = data;
+      html = res;
+    }
+    {
+      const { res, data } = parseTagAttrs(html);
+      style.attributes = data;
+      html = res;
+    }
+    if (html.startsWith('/>')) {
+      style.noBody = true;
+      html = html.substr(2);
+      return { res: html, data: style };
+    }
+    // html starts with '>'
+    html = html.substr(1);
+    {
+      const { res, data } = parseStyleBody(html);
+      style.textContent = data;
+      html = res;
+    }
+    assert(html[0] === '<', 'expect style close tag');
+    if (html.startsWith('</style>')) {
+      // normal close
+      style.notClosed = false;
+      html = html.substr('</style>'.length);
+    } else {
+      // auto repair close
+      style.notClosed = true;
+    }
+    return { res: html, data: style };
   }
 }
 
