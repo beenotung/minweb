@@ -35,6 +35,7 @@ export const textonly_tag_blackList = [
   'img',
   'video',
   'svg',
+  'nav',
 ];
 
 function filter_textonly(topLevel: HTMLItem[]): HTMLItem[] {
