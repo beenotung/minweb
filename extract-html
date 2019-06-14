@@ -1,8 +1,0 @@
-#!/bin/bash
-set -e
-cat err.log \
-  | tr "\n" "\t" \
-  | sed 's,</html>,</html>\n,' \
-  | head -n 1 \
-  | tr "\t" "\n" \
-  > in.html
