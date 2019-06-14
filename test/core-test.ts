@@ -53,7 +53,6 @@ testFile(test, 'demo/not-closed.html');
 testFile(test, 'demo/style.html');
 testFile(test, 'demo/script.html');
 testFile(test, 'demo/link.html');
-testFile(test, 'demo/link-compact.html');
 testFile(test, 'demo/json.html');
 testFile(test, 'demo/svg.html');
 testUrl(test, 'http://yahoo.hk');
