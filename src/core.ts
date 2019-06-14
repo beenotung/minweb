@@ -55,6 +55,7 @@ function filter_textonly(topLevel: HTMLItem[]): HTMLItem[] {
 }
 
 export const Tag_Article = 'article';
+export const Tag_IFrame = 'iframe';
 
 function filter_article(topLevel: HTMLItem[]): HTMLItem[] {
   const res: HTMLItem[] = [];

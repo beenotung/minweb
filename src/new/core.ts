@@ -1,6 +1,7 @@
 import {
   MinifyHTMLOptions,
   Tag_Article,
+  Tag_IFrame,
   tag_whitelist,
   textonly_tag_blackList,
 } from '../core';
@@ -789,85 +790,6 @@ export function parseHtmlDocument(html: string): Document {
   return root;
 }
 
-interface FilterNodeOptions {
-  /* tslint:disable:ban-types */
-  tagNameSkipList?: string[];
-  nodeClassSkipList?: Function[];
-  tagNameWhiteList?: string[];
-  tagNameBlackList?: string[];
-  nodeClassWhiteList?: Function[];
-  nodeClassBlackList?: Function[];
-  /* tslint:enable:ban-types */
-}
-
-/**
- * check skip list first
- * check black list before whitelist
- * (then whitelist is useless?)
- * @deprecated
- * */
-const filterNode = (node: Node, options: FilterNodeOptions) => {
-  const tagNameSkipList = options.tagNameSkipList || [];
-  const nodeClassSkipList = options.nodeClassSkipList || [];
-
-  const f = (node: Node) => {
-    if (
-      nodeClassSkipList.some(c => node instanceof c) ||
-      isAnyTagName(node, tagNameSkipList)
-    ) {
-      return;
-    }
-    node.childNodes = node.childNodes.filter(node => {
-      let element: HTMLElement;
-      if (node instanceof HTMLElement) {
-        element = node;
-      }
-      if ('tagNameBlackList' in options) {
-        return !element || !element.isAnyTagName(options.tagNameBlackList);
-      }
-      if ('nodeClassBlackList' in options) {
-        return (
-          !element || !options.nodeClassBlackList.some(c => node instanceof c)
-        );
-      }
-      if ('tagNameWhiteList' in options) {
-        return element && element.isAnyTagName(options.tagNameWhiteList);
-      }
-      if ('nodeClassWhiteList' in options) {
-        return (
-          element && options.nodeClassWhiteList.some(c => node instanceof c)
-        );
-      }
-    });
-  };
-  f(node);
-};
-
-const filterArticle = (node: Node) => {
-  if (node instanceof HTMLElement) {
-    if (node.isTagName(Tag_Article) || node.isAnyTagName(tag_whitelist)) {
-      return;
-    }
-    if (
-      node.hasElementByTagName(Tag_Article) ||
-      node.hasElementByAnyTagName(tag_whitelist)
-    ) {
-      node.childNodes = node.childNodes.filter(node => filterArticle(node));
-    }
-  }
-};
-
-const filterTextOnly = (node: Node) => {
-  if (node instanceof HTMLElement) {
-    node.childNodes = node.childNodes.filter(node => {
-      if (node instanceof HTMLElement) {
-        return !node.isAnyTagName(textonly_tag_blackList) && node.hasText();
-      }
-      return true;
-    });
-  }
-};
-
 export function minifyHTML(html: string, options: MinifyHTMLOptions): string {
   if (!html) {
     return '';
@@ -875,46 +797,88 @@ export function minifyHTML(html: string, options: MinifyHTMLOptions): string {
   const document = parseHtmlDocument(html);
   // walkNode(document, node => node.childNodes = node.childNodes || []);
 
-  /**@deprecated*/
-  const filterNodeOptions: FilterNodeOptions = {
-    nodeClassBlackList: [Comment],
-    tagNameWhiteList: [...tag_whitelist],
-    tagNameBlackList: [...options.skipTags],
-  };
-
-  // skip comment
-  walkNode(
-    document,
-    node =>
-      (node.childNodes = (node.childNodes || []).filter(
-        node => !(node instanceof Comment),
-      )),
-  );
-
-  if (options.article_mode) {
-    filterArticle(document);
-  }
-
-  if (options.text_mode) {
-    filterNodeOptions.tagNameBlackList.push(...textonly_tag_blackList);
-    filterTextOnly(document);
-  }
-
   const skipTags: string[] = options.skipTags;
   const skipAttrs: string[] = [];
-  const skipAttrFs: Array<(name: string, value: string) => boolean> = [];
+  const skipAttrFs: Array<(name: string, value?: string) => boolean> = [];
   if (skipTags.includes('style')) {
     skipTags.push('link');
     skipAttrs.push('style');
     if (skipTags.includes('script')) {
       skipAttrs.push('class', 'id');
-      skipAttrFs.push((name, value) => !name.startsWith('data-'));
+      skipAttrFs.push((name: string) => !name.startsWith('data-'));
     }
   }
-  if (skipTags.includes('iframe')) {
-  }
+  const skipIFrame = skipTags.includes(Tag_IFrame);
 
-  filterNode(document, filterNodeOptions);
+  walkNode(document, node => {
+    node.childNodes = (node.childNodes || []).filter(node => {
+      // skip comment
+      if (node instanceof Comment) {
+        return false;
+      }
+
+      const element = node instanceof HTMLElement ? node : undefined;
+
+      if (element) {
+        if (element.isAnyTagName(skipTags)) {
+          return false;
+        }
+        element.attributes.attrs = element.attributes.attrs.filter(
+          attr =>
+            typeof attr !== 'object' ||
+            skipAttrs.every(name => attr.name !== name.toLowerCase()) ||
+            skipAttrFs.every(f => f(attr.name, attr.value)),
+        );
+      }
+
+      if (options.article_mode && element) {
+        if (
+          !(
+            element.isTagName(Tag_Article) ||
+            element.isAnyTagName(tag_whitelist) ||
+            element.hasElementByTagName(Tag_Article) ||
+            element.hasElementByAnyTagName(tag_whitelist)
+          )
+        ) {
+          return false;
+        }
+      }
+
+      if (options.text_mode) {
+        if (node instanceof Text) {
+          return true;
+        }
+        if (
+          element.isAnyTagName(textonly_tag_blackList) ||
+          !element.hasText()
+        ) {
+          return false;
+        }
+      }
+
+      if (skipIFrame && element) {
+        if (element.isTagName(Tag_IFrame)) {
+          element.tagName = 'a';
+          const src = element.attributes.getValue('src');
+          if (src) {
+            // has src
+            element.attributes.attrs = [{ name: 'href', value: src }];
+            element.noBody = false;
+            element.notClosed = false;
+            const text = new Text();
+            text.outerHTML = 'iframe: ' + src;
+            element.childNodes = [text];
+            return true;
+          } else {
+            // has no src
+            element.attributes.attrs = [];
+            element.childNodes = [];
+            return false;
+          }
+        }
+      }
+    });
+  });
 
   return document.outerHTML;
 }
