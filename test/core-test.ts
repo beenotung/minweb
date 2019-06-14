@@ -1,4 +1,4 @@
-import { parseHtml, wrapNode } from '../src/new/core';
+import { parseHtmlDocument, wrapNode } from '../src/new/core';
 import { saveFile, testFile, testUrl } from './utils';
 
 const logTo = { console: false, file: true };
@@ -10,7 +10,7 @@ async function test(html: string, name: string) {
     console.log('================');
   }
 
-  const root = parseHtml(html);
+  const root = parseHtmlDocument(html);
   const wrappedNode = wrapNode(root);
 
   const restructuredHtml = root.outerHTML;

@@ -28,12 +28,19 @@ const item_is_any_tag = (item: HTMLItem, names: string[]): boolean =>
   item.tag && names.indexOf(item.tag.name.toLowerCase()) !== -1;
 
 /* for textonly and article */
-const tag_whitelist = ['head', 'style', 'link', 'meta'];
+export const tag_whitelist = ['head', 'style', 'link', 'meta'];
+export const textonly_tag_blackList = [
+  'script',
+  'button',
+  'img',
+  'video',
+  'svg',
+];
 
 function filter_textonly(topLevel: HTMLItem[]): HTMLItem[] {
   const res: HTMLItem[] = [];
   topLevel.forEach(item => {
-    if (item_is_any_tag(item, ['script', 'button', 'img', 'video', 'svg'])) {
+    if (item_is_any_tag(item, textonly_tag_blackList)) {
       return;
     }
     if (item.command || item.text || item_is_any_tag(item, tag_whitelist)) {
@@ -47,7 +54,7 @@ function filter_textonly(topLevel: HTMLItem[]): HTMLItem[] {
   return res;
 }
 
-const Tag_Article = 'article';
+export const Tag_Article = 'article';
 
 function filter_article(topLevel: HTMLItem[]): HTMLItem[] {
   const res: HTMLItem[] = [];
@@ -168,6 +175,7 @@ function scanner_add_to_body(
     scanner_add_to_body(item, preChildren, postChildren),
   );
 }
+
 /* tslint:enable:no-unused-variable */
 
 function scanner_map_text(item: HTMLItem, f: (s: string) => string) {
@@ -210,7 +218,7 @@ function url_to_base(s: string): string {
 export interface MinifyHTMLOptions {
   textDecorator?: TextDecorator;
   theme?: Theme;
-  skipTags?: string[];
+  skipTags: string[];
   url?: string;
   hrefPrefix?: string;
   article_mode?: boolean;
@@ -218,7 +226,7 @@ export interface MinifyHTMLOptions {
   inject_style?: boolean;
 }
 
-const defaultSkipTags: string[] = [
+export const defaultSkipTags: string[] = [
   'script',
   // , 'style'
   // , 'link'

@@ -1,3 +1,10 @@
+import {
+  MinifyHTMLOptions,
+  Tag_Article,
+  tag_whitelist,
+  textonly_tag_blackList,
+} from '../core';
+
 export let config = {
   dev: false,
   debug: false,
@@ -23,6 +30,15 @@ interface NodeConstructor<T extends Node> {
   new (): T;
 
   parse(html: string): ParseResult<T>;
+}
+
+function walkNode(
+  node: Node,
+  f: (node: Node, parent: Node) => void,
+  parent = node,
+) {
+  f(node, parent);
+  node.childNodes.forEach(node => walkNode(node, f, parent), parent);
 }
 
 type ForCharResult = 'stop' | 'skip' | { res: string };
@@ -308,6 +324,18 @@ function parseHTMLElementTail(
   return { res: html, data: void 0 };
 }
 
+function isTagName(node: Node, tagName: string) {
+  /* tslint:disable:no-use-before-declare */
+  return node instanceof HTMLElement && node.isTagName(tagName);
+  /* tslint:enable:no-use-before-declare */
+}
+
+function isAnyTagName(node: Node, tagNames: string[]) {
+  /* tslint:disable:no-use-before-declare */
+  return node instanceof HTMLElement && node.isAnyTagName(tagNames);
+  /* tslint:enable:no-use-before-declare */
+}
+
 class HTMLElement extends Node {
   tagName: string;
   noBody = false;
@@ -328,6 +356,56 @@ class HTMLElement extends Node {
       html += `</${this.tagName}>`;
     }
     return html;
+  }
+
+  /**
+   * @param tagName assume to be in lower case
+   * TODO optimize this part if possible
+   * */
+  isTagName(tagName: string): boolean {
+    return this.tagName.toLowerCase() === tagName;
+  }
+
+  /**
+   * @param tagName assume to be in lower case
+   * TODO optimize this part if possible
+   * */
+  isAnyTagName(tagNames: string[]): boolean {
+    const tagName = this.tagName.toLowerCase();
+    return tagNames.some(tag => tag === tagName);
+  }
+
+  hasText(): boolean {
+    return (
+      this.childNodes &&
+      this.childNodes.some(
+        node =>
+          node instanceof Text ||
+          (node instanceof HTMLElement && node.hasText()),
+      )
+    );
+  }
+
+  getElementsByTagName(tagName: string): HTMLElement[] {
+    const elements: HTMLElement[] = [];
+    walkNode(this, node => {
+      if (isTagName(node, tagName)) {
+        elements.push(node as HTMLElement);
+      }
+    });
+    return elements;
+  }
+
+  hasElementByTagName(tagName: string): boolean {
+    const f = (node: Node) =>
+      isTagName(node, tagName) || node.childNodes.some(node => f(node));
+    return f(this);
+  }
+
+  hasElementByAnyTagName(tagNames: string[]): boolean {
+    const f = (node: Node) =>
+      isAnyTagName(node, tagNames) || node.childNodes.some(node => f(node));
+    return f(this);
   }
 
   static parse(html: string): ParseResult<Node> {
@@ -687,7 +765,7 @@ function parse<T extends Node>(
   return res;
 }
 
-export function parseHtml(html: string): HTMLElement {
+export function parseHtmlDocument(html: string): Document {
   const root = new Document();
   root.childNodes = [];
   for (; html.length > 0; ) {
@@ -711,6 +789,136 @@ export function parseHtml(html: string): HTMLElement {
   return root;
 }
 
+interface FilterNodeOptions {
+  /* tslint:disable:ban-types */
+  tagNameSkipList?: string[];
+  nodeClassSkipList?: Function[];
+  tagNameWhiteList?: string[];
+  tagNameBlackList?: string[];
+  nodeClassWhiteList?: Function[];
+  nodeClassBlackList?: Function[];
+  /* tslint:enable:ban-types */
+}
+
+/**
+ * check skip list first
+ * check black list before whitelist
+ * (then whitelist is useless?)
+ * @deprecated
+ * */
+const filterNode = (node: Node, options: FilterNodeOptions) => {
+  const tagNameSkipList = options.tagNameSkipList || [];
+  const nodeClassSkipList = options.nodeClassSkipList || [];
+
+  const f = (node: Node) => {
+    if (
+      nodeClassSkipList.some(c => node instanceof c) ||
+      isAnyTagName(node, tagNameSkipList)
+    ) {
+      return;
+    }
+    node.childNodes = node.childNodes.filter(node => {
+      let element: HTMLElement;
+      if (node instanceof HTMLElement) {
+        element = node;
+      }
+      if ('tagNameBlackList' in options) {
+        return !element || !element.isAnyTagName(options.tagNameBlackList);
+      }
+      if ('nodeClassBlackList' in options) {
+        return (
+          !element || !options.nodeClassBlackList.some(c => node instanceof c)
+        );
+      }
+      if ('tagNameWhiteList' in options) {
+        return element && element.isAnyTagName(options.tagNameWhiteList);
+      }
+      if ('nodeClassWhiteList' in options) {
+        return (
+          element && options.nodeClassWhiteList.some(c => node instanceof c)
+        );
+      }
+    });
+  };
+  f(node);
+};
+
+const filterArticle = (node: Node) => {
+  if (node instanceof HTMLElement) {
+    if (node.isTagName(Tag_Article) || node.isAnyTagName(tag_whitelist)) {
+      return;
+    }
+    if (
+      node.hasElementByTagName(Tag_Article) ||
+      node.hasElementByAnyTagName(tag_whitelist)
+    ) {
+      node.childNodes = node.childNodes.filter(node => filterArticle(node));
+    }
+  }
+};
+
+const filterTextOnly = (node: Node) => {
+  if (node instanceof HTMLElement) {
+    node.childNodes = node.childNodes.filter(node => {
+      if (node instanceof HTMLElement) {
+        return !node.isAnyTagName(textonly_tag_blackList) && node.hasText();
+      }
+      return true;
+    });
+  }
+};
+
+export function minifyHTML(html: string, options: MinifyHTMLOptions): string {
+  if (!html) {
+    return '';
+  }
+  const document = parseHtmlDocument(html);
+  // walkNode(document, node => node.childNodes = node.childNodes || []);
+
+  /**@deprecated*/
+  const filterNodeOptions: FilterNodeOptions = {
+    nodeClassBlackList: [Comment],
+    tagNameWhiteList: [...tag_whitelist],
+    tagNameBlackList: [...options.skipTags],
+  };
+
+  // skip comment
+  walkNode(
+    document,
+    node =>
+      (node.childNodes = (node.childNodes || []).filter(
+        node => !(node instanceof Comment),
+      )),
+  );
+
+  if (options.article_mode) {
+    filterArticle(document);
+  }
+
+  if (options.text_mode) {
+    filterNodeOptions.tagNameBlackList.push(...textonly_tag_blackList);
+    filterTextOnly(document);
+  }
+
+  const skipTags: string[] = options.skipTags;
+  const skipAttrs: string[] = [];
+  const skipAttrFs: Array<(name: string, value: string) => boolean> = [];
+  if (skipTags.includes('style')) {
+    skipTags.push('link');
+    skipAttrs.push('style');
+    if (skipTags.includes('script')) {
+      skipAttrs.push('class', 'id');
+      skipAttrFs.push((name, value) => !name.startsWith('data-'));
+    }
+  }
+  if (skipTags.includes('iframe')) {
+  }
+
+  filterNode(document, filterNodeOptions);
+
+  return document.outerHTML;
+}
+
 /* for debug */
 export function wrapNode(node: Node) {
   const constructor = ((node as any) as HTMLElement)
@@ -730,3 +938,6 @@ export function wrapNode(node: Node) {
 export function logNode(node: Node) {
   console.log(JSON.stringify(wrapNode(node), null, 2));
 }
+
+/* tslint:disable:no-use-before-declare */
+/* tslint:enable:no-use-before-declare */

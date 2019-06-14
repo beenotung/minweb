@@ -17,7 +17,7 @@ export async function main(
   url: string,
   options?: MinifyHTMLOptions,
   htmlWatcher?: (s: string) => void,
-) {
+): Promise<string> {
   if (!options) {
     options = { url };
   } else {
