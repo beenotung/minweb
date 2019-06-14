@@ -31,10 +31,11 @@ export async function main(
         htmlWatcher(html);
       }
       const minifiedHtml = minifyHTML(html, options);
-      const p = Math.round((minifiedHtml.length / html.length) * 100 * 100) / 100;
+      const p =
+        Math.round((minifiedHtml.length / html.length) * 100 * 100) / 100;
       return (
         minifiedHtml +
-        `\n<!--- url=${url} chars=${html.length} minified=${p}% -->`
+        `\n<!--- url=${url} ori-chars=${html.length} minified-to=${p}% -->`
       );
     })
     .catch(e => {
