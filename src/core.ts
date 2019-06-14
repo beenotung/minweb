@@ -219,7 +219,7 @@ function url_to_base(s: string): string {
 export interface MinifyHTMLOptions {
   textDecorator?: TextDecorator;
   theme?: Theme;
-  skipTags: string[];
+  skipTags?: string[];
   url?: string;
   hrefPrefix?: string;
   article_mode?: boolean;

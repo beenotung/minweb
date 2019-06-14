@@ -1,4 +1,6 @@
+import * as fs from 'fs';
 import {
+  defaultSkipTags,
   MinifyHTMLOptions,
   Tag_Article,
   Tag_IFrame,
@@ -797,7 +799,7 @@ export function minifyHTML(html: string, options: MinifyHTMLOptions): string {
   const document = parseHtmlDocument(html);
   // walkNode(document, node => node.childNodes = node.childNodes || []);
 
-  const skipTags: string[] = options.skipTags;
+  const skipTags: string[] = options.skipTags || defaultSkipTags;
   const skipAttrs: string[] = [];
   const skipAttrFs: Array<(name: string, value?: string) => boolean> = [];
   if (skipTags.includes('style')) {
@@ -805,7 +807,7 @@ export function minifyHTML(html: string, options: MinifyHTMLOptions): string {
     skipAttrs.push('style');
     if (skipTags.includes('script')) {
       skipAttrs.push('class', 'id');
-      skipAttrFs.push((name: string) => !name.startsWith('data-'));
+      skipAttrFs.push((name: string) => name.startsWith('data-'));
     }
   }
   const skipIFrame = skipTags.includes(Tag_IFrame);
@@ -825,9 +827,11 @@ export function minifyHTML(html: string, options: MinifyHTMLOptions): string {
         }
         element.attributes.attrs = element.attributes.attrs.filter(
           attr =>
-            typeof attr !== 'object' ||
-            skipAttrs.every(name => attr.name !== name.toLowerCase()) ||
-            skipAttrFs.every(f => f(attr.name, attr.value)),
+            !(
+              typeof attr === 'object' &&
+              (skipAttrs.some(name => attr.name.toLowerCase() === name) ||
+                skipAttrFs.some(f => f(attr.name, attr.value)))
+            ),
         );
       }
 
@@ -877,8 +881,16 @@ export function minifyHTML(html: string, options: MinifyHTMLOptions): string {
           }
         }
       }
+
+      return true;
     });
   });
+  if (config.dev) {
+    fs.writeFileSync(
+      'wrapped-root.json',
+      JSON.stringify(wrapNode(document), null, 2),
+    );
+  }
 
   return document.outerHTML;
 }

@@ -1,10 +1,11 @@
-import {unescape} from "querystring";
-import {main} from "../src/main";
+import { unescape } from 'querystring';
+import { main } from '../src/main';
+import { saveFile } from './utils';
 
-const fetch = require("node-fetch");
+const fetch = require('node-fetch');
 
-let url = "https://en.wikipedia.org/wiki/Gem%C3%BCtlichkeit";
-url = "https://hk.yahoo.com/";
+let url = 'https://en.wikipedia.org/wiki/Gem%C3%BCtlichkeit';
+url = 'https://hk.yahoo.com/';
 url = 'https://hk.style.yahoo.com/%E8%82%89%E5%A5%B3%E8%88%87%E8%83%96%E5%A5%B3-033000246.html';
 url = 'http://beeno-tung.surge.sh';
 url = 'https://maps.google.com.hk/maps?f=q&geocode=&q=22.316776,114.167558(%E5%AE%B6%E5%AE%B6%E7%A6%AE%E5%93%81%E6%8F%9B%E9%A0%98%E4%B8%AD%E5%BF%83%EF%BC%9A%E6%97%BA%E8%A7%92%E5%BB%A3%E6%9D%B1%E9%81%93+982+%E8%99%9F%E5%98%89%E5%AF%8C%E5%95%86%E6%A5%AD%E4%B8%AD%E5%BF%83+17+%E6%A8%93%E5%85%A8%E5%B1%A4+-+%E6%97%BA%E8%A7%92%E6%B8%AF%E9%90%B5%E7%AB%99+E1+%E5%87%BA%E5%8F%A3+)&z=17&iwloc=A';
@@ -23,14 +24,14 @@ main(url, {
   // theme: 'light'
   // theme: 'console'
   , skipTags: [
-    "script"
-    , "style"
-    , "link"
+    'script'
+    , 'style'
+    , 'link',
   ]
   , url: url
-  , hrefPrefix: 'https://minweb.surge.sh?url='
+  , hrefPrefix: 'https://minweb.surge.sh?url=',
   // , article_mode: true
   // , text_mode: true
-}, s => console.error(s))
-  .then(s => console.log(s))
+}, s => saveFile('in.html', s))
+  .then(s => saveFile('out.html', s))
 ;
