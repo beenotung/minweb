@@ -11,6 +11,7 @@ handle: parse and encode
 - [x] not properly closed elements, e.g. li, td
 - [x] style
 - [x] script
+- [ ] svg
 
 == todo
 - [ ] support filtering features

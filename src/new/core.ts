@@ -130,7 +130,7 @@ function parseString(html: string, deliminator: string): ParseResult<string> {
         acc += c;
         return 'stop';
       case '\\':
-        acc += html[i + 1];
+        acc += '\\' + html[i + 1];
         return 'skip';
       default:
         acc += c;

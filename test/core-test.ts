@@ -1,11 +1,9 @@
-import * as fs from 'fs';
 import { parseHtml, wrapNode } from '../src/new/core';
-
-const fetch = require('node-fetch');
+import { saveFile, testFile, testUrl } from './utils';
 
 const logTo = { console: false, file: true };
 
-function test(html: string) {
+async function test(html: string, name: string) {
   if (logTo.console) {
     console.log('== input html ==');
     console.log(html);
@@ -17,53 +15,46 @@ function test(html: string) {
 
   const restructuredHtml = root.outerHTML;
   if (restructuredHtml !== html) {
-    console.log('not matched');
+    console.log('not matched:', name);
     if (logTo.file) {
-      fs.writeFileSync('in.html', html);
-      fs.writeFileSync('out.html', restructuredHtml);
-      fs.writeFileSync('out-in-len.html', restructuredHtml.substr(0, html.length));
-      fs.writeFileSync('out-extra.html', restructuredHtml.substr(html.length));
-      fs.writeFileSync('root.json', JSON.stringify(root, null, 2));
-      fs.writeFileSync('wrapped-root.json', JSON.stringify(wrappedNode, null, 2));
+      await Promise.all([
+        saveFile('in.html', html),
+        saveFile('out.html', restructuredHtml),
+        saveFile('out-in-len.html', restructuredHtml.substr(0, html.length)),
+        saveFile('out-extra.html', restructuredHtml.substr(html.length)),
+        saveFile('root.json', JSON.stringify(root, null, 2)),
+        saveFile('wrapped-root.json', JSON.stringify(wrappedNode, null, 2)),
+      ]);
     }
     if (logTo.console) {
       console.log();
       console.log('== restructured html ==');
       console.log(restructuredHtml);
       console.log('=======================');
+
+      console.log();
+      console.log('== parsed root == ');
+      console.log(JSON.stringify(wrappedNode, null, 2));
+      console.log('================= ');
     }
+    process.exit(1);
   } else {
-    console.log('matched');
+    console.log('matched:', name);
   }
 
-  if (logTo.console) {
-    console.log();
-    console.log('== parsed root == ');
-    console.log(JSON.stringify(wrappedNode, null, 2));
-    console.log('================= ');
-  }
   // const s2 = topLevel.map(htmlItem_to_string_no_comment).join('');
   // console.error(s2);
 }
 
-function testUrl(url: string) {
-  fetch(url)
-    .then(x => x.text())
-    .then(html => test(html));
-}
-
-function testFile(filename: string) {
-  test(fs.readFileSync(filename).toString());
-}
-
-// testUrl('http://yahoo.hk');
-// testUrl('https://www.forbes.com/sites/jennifercohen/2014/06/18/5-proven-methods-for-gaining-self-discipline/');
-// testFile('demo/a.html');
-// testFile('demo/mobile.html');
-// testFile('demo/comment.html');
-// testFile('demo/not-closed.html');
-// testFile('demo/style.html');
-// testFile('demo/script.html');
-// testFile('demo/link.html');
-// testFile('demo/link-compact.html');
-testFile('demo/json.html');
+testFile(test, 'demo/a.html');
+testFile(test, 'demo/mobile.html');
+testFile(test, 'demo/comment.html');
+testFile(test, 'demo/not-closed.html');
+testFile(test, 'demo/style.html');
+testFile(test, 'demo/script.html');
+testFile(test, 'demo/link.html');
+testFile(test, 'demo/link-compact.html');
+testFile(test, 'demo/json.html');
+testFile(test, 'demo/svg.html');
+testUrl(test, 'http://yahoo.hk');
+testUrl(test, 'https://www.forbes.com/sites/jennifercohen/2014/06/18/5-proven-methods-for-gaining-self-discipline/');

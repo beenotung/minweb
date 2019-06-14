@@ -1,25 +1,16 @@
-import * as fs from 'fs';
 import { htmlItem_to_string_no_comment, parseHTMLTree } from '../src/parser';
+import { saveFile, testFile } from './utils';
 
-const fetch = require('node-fetch');
 
-function test(s1: string) {
+async function test(s1: string) {
   const topLevel = parseHTMLTree(s1);
   const s2 = topLevel.map(htmlItem_to_string_no_comment).join('');
-  console.log(s1);
-  console.error(s2);
+  await Promise.all([
+    saveFile('in.html', s1),
+    saveFile('out.html', s2),
+  ]);
 }
 
-function testUrl(url: string) {
-  fetch(url)
-    .then(x => x.text())
-    .then(html => test(html));
-}
-
-function testFile(filename: string) {
-  test(fs.readFileSync(filename).toString());
-}
-
-// testUrl('http://yahoo.hk');
-// testUrl('https://www.forbes.com/sites/jennifercohen/2014/06/18/5-proven-methods-for-gaining-self-discipline/');
-testFile('demo/link.html');
+// testUrl(test, 'http://yahoo.hk');
+// testUrl(test, 'https://www.forbes.com/sites/jennifercohen/2014/06/18/5-proven-methods-for-gaining-self-discipline/');
+testFile(test, 'demo/a.html');
