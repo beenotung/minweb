@@ -26,12 +26,15 @@ export async function main(
   }
   return fetch(checkUrl(url))
     .then(x => x.text())
-    .then(s => {
+    .then(html => {
       if (htmlWatcher) {
-        htmlWatcher(s);
+        htmlWatcher(html);
       }
+      const minifiedHtml = minifyHTML(html, options);
+      const p = Math.round((minifiedHtml.length / html.length) * 100 * 100) / 100;
       return (
-        minifyHTML(s, options) + `\n<!--- url=${url} chars=${s.length} -->`
+        minifiedHtml +
+        `\n<!--- url=${url} chars=${html.length} minified=${p}% -->`
       );
     })
     .catch(e => {
