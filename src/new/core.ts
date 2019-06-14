@@ -344,7 +344,7 @@ class HTMLElement extends Node {
     if (node.tagName.toLowerCase() === 'script') {
       return continueParseScriptFromHTMLElement(html, node);
     }
-    if (noBody(node.tagName)) {
+    if (node.noBody || noBody(node.tagName)) {
       return { res: html, data: node };
     }
     node.childNodes = [];
