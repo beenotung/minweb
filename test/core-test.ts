@@ -4,6 +4,7 @@ import { saveFile, testFile, testUrl } from './utils';
 const logTo = { console: false, file: true };
 
 async function test(html: string, name: string) {
+  html = html.trim();
   if (logTo.console) {
     console.log('== input html ==');
     console.log(html);
@@ -15,6 +16,7 @@ async function test(html: string, name: string) {
 
   const restructuredHtml = root.outerHTML;
   if (restructuredHtml !== html) {
+    // if ('dev') {
     console.log('not matched:', name);
     if (logTo.file) {
       await Promise.all([
@@ -57,3 +59,4 @@ testFile(test, 'demo/json.html');
 testFile(test, 'demo/svg.html');
 testUrl(test, 'http://yahoo.hk');
 testUrl(test, 'https://www.forbes.com/sites/jennifercohen/2014/06/18/5-proven-methods-for-gaining-self-discipline/');
+testUrl(test, 'https://www.jessicahk.com/articles/qing-gan-ce-shi-kan-ni-shi-fou-hao-se-nu');

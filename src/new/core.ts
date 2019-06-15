@@ -768,7 +768,11 @@ function parse<T extends Node>(
   return res;
 }
 
-export function parseHtmlDocument(html: string): Document {
+export function parseHtmlDocument(html: string, skipTrim = false): Document {
+  if (!skipTrim) {
+    // to escape 5 leading 0xFEFF
+    html = html.trimLeft();
+  }
   const root = new Document();
   root.childNodes = [];
   for (; html.length > 0; ) {
@@ -892,7 +896,7 @@ export function minifyHTML(html: string, options: MinifyHTMLOptions): string {
     );
   }
 
-  return document.outerHTML;
+  return document.outerHTML.trim();
 }
 
 /* for debug */
