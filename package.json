@@ -6,6 +6,7 @@
   "scripts": {
     "format": "prettier --write \"src/**/*.ts\"",
     "postformat": "tslint --fix -p .",
+    "build": "parcel build --target node --no-source-maps src/webtask.ts",
     "test": "ts-node src/test.ts"
   },
   "keywords": [

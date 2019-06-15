@@ -1,6 +1,7 @@
 import { unescape } from 'querystring';
-import { main } from '../src/main';
 import { saveFile } from './utils';
+import { MinifyHTMLOptions } from '../src/core';
+import { minifyHTML } from '../src/new/core';
 
 const fetch = require('node-fetch');
 
@@ -19,7 +20,7 @@ url = 'https://hk.news.yahoo.com/%E8%B2%AA%E7%8E%A9%E7%94%9F%E5%90%9E%E9%BC%BB%E
 url = 'http://yahoo.hk';
 url = 'https://www.jessicahk.com/articles/qing-gan-ce-shi-kan-ni-shi-fou-hao-se-nu';
 
-main(url, {
+let options: MinifyHTMLOptions = {
   // textDecorator: debugTextDecorator
   theme: 'dark'
   // theme: 'light'
@@ -33,6 +34,14 @@ main(url, {
   , hrefPrefix: 'https://minweb.surge.sh?url=',
   // , article_mode: true
   // , text_mode: true
-}, s => saveFile('in.html', s))
-  .then(s => saveFile('out.html', s))
-;
+};
+
+fetch(url)
+  .then(res => res.text())
+  .then(html => {
+    let ps = [];
+    ps.push(saveFile('in.html', html));
+    let minifiedHtml = minifyHTML(html, options);
+    ps.push(saveFile('out.html', minifiedHtml));
+    return Promise.all(ps);
+  });
