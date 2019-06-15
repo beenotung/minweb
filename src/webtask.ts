@@ -160,6 +160,7 @@ function handleProxy(context, req: Request, res: Response) {
 <p>Failed to parse destination html</p>
 <p>url = <code>${url}</code></p>
 <code>${e.toString()}</code>
+<pre>${e.stack}</pre>
 `),
       );
     });

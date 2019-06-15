@@ -1,0 +1,22 @@
+#!/bin/bash
+set -e
+tmp="tmp.$RANDOM.js"
+out="webtask.js"
+npx tsc -p tsconfig.webtask.json
+rm -f "$tmp"
+cat dist/utils.js >> "$tmp"
+cat dist/theme.js >> "$tmp"
+cat dist/opt-out.js >> "$tmp"
+cat dist/core.js >> "$tmp"
+cat dist/new/parser.js >> "$tmp"
+cat dist/new/core.js >> "$tmp"
+cat dist/main.js >> "$tmp"
+cat dist/webtask.js >> "$tmp"
+cat "$tmp" \
+  | grep -v $'import { .* } from \'\./.*\';' \
+  | grep -v '^import { ' \
+  | sed 's/^export //' \
+  > "$out"
+rm "$tmp"
+cat "$out" | xclip -sel clipboard
+echo "saved to clipboard."
