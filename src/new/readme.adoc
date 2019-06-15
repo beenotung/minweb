@@ -8,10 +8,22 @@ handle: parse and encode
 - [x] command
 - [x] short-closed elements
 - [x] comment
-- [x] not properly closed elements, e.g. li, td
+- [ ] auto fix not properly closed elements*, e.g. li, td
 - [x] style
 - [x] script
 - [x] svg
+
+=== auto fix not properly closed element
+```
+when unexpected closing tag is saw
+
+  if the tag name is in the parent
+    auto close until the matching parent
+    auto create new opening tag to wrap following element
+
+  if the tag name is not in the parent
+    ignore the unexpected closing tag
+```
 
 == todo
 - [ ] support filtering features

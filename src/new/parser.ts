@@ -17,6 +17,8 @@ export abstract class Node {
   abstract outerHTML: string;
   abstract minifiedOuterHTML: string;
   childNodes?: Node[];
+  // TODO use parentNode to distinct auto close and extra closing
+  //  abstract parentNode:Node;
 
   abstract clone(): this;
 }
@@ -548,11 +550,16 @@ export class HTMLElement extends Node {
     return f(this);
   }
 
-  static parse(html: string): ParseResult<Node> {
+  static parse(html: string /* TODO ,parent:Node*/): ParseResult<Node> {
     // const originalHtml = html;
     let node: HTMLElement;
     {
       const { res, data } = parseHTMLElementHead(html);
+      if (data instanceof HTMLElement) {
+        if (data.extraClosing) {
+          // TODO distinct auto closing and extra closing
+        }
+      }
       node = data;
       html = res;
     }
