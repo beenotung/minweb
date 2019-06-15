@@ -1,6 +1,7 @@
 import { unescape } from 'querystring';
 import { saveFile } from './utils';
 import { minifyHTML, MinifyHTMLOptions } from '../src/core';
+import { parseHtmlDocument, wrapNode } from '../src/new/parser';
 
 const fetch = require('node-fetch');
 
@@ -34,13 +35,18 @@ let options: MinifyHTMLOptions = {
   // , article_mode: true
   // , text_mode: true
 };
-
 fetch(url)
   .then(res => res.text())
   .then(html => {
     let ps = [];
+
     ps.push(saveFile('in.html', html));
+
+    let document = parseHtmlDocument(html);
+    ps.push(saveFile('wrapped-root.html', JSON.stringify(wrapNode(document), null, 2)));
+
     let minifiedHtml = minifyHTML(html, options);
     ps.push(saveFile('out.html', minifiedHtml));
+
     return Promise.all(ps);
   });

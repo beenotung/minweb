@@ -11,7 +11,11 @@ webtask.js
 in.html
 /log.html
 /in.html
+/in-root.json
+/in-root.txt
 /out.html
+/out-root.json
+/out-root.txt
 /out-in-len.html
 /out-extra.html
 /root.json

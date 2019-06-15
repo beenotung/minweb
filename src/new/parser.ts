@@ -1,6 +1,7 @@
 export let config = {
   dev: false,
   debug: false,
+  debugStream: false,
   autoRepair: false,
 };
 // config.dev = true;
@@ -13,8 +14,11 @@ interface ParseResult<T> {
 }
 
 export abstract class Node {
-  outerHTML: string;
+  abstract outerHTML: string;
+  abstract minifiedOuterHTML: string;
   childNodes?: Node[];
+
+  abstract clone(): this;
 }
 
 export interface NodeConstructor<T extends Node> {
@@ -27,14 +31,48 @@ export interface NodeConstructor<T extends Node> {
 
 export function walkNode(
   node: Node,
-  f: (node: Node, parent: Node) => void,
+  f: (node: Node, parent: Node, idx: number) => void,
   parent = node,
+  idx = -1,
 ) {
-  f(node, parent);
-  node.childNodes.forEach(node => walkNode(node, f, parent), parent);
+  f(node, parent, idx);
+  node.childNodes.forEach((child, idx) => walkNode(child, f, node, idx));
 }
 
-type ForCharResult = 'stop' | 'skip' | { res: string };
+export function walkNodeReversed(
+  node: Node,
+  f: (node: Node, parent: Node, idx: number) => void,
+  parent = node,
+) {
+  const stack: Array<{ node: Node; parent: Node; idx: number }> = [];
+  walkNode(
+    node,
+    (node, parent, idx) => stack.push({ node, parent, idx }),
+    parent,
+  );
+  for (let i = stack.length; i > 0; i--) {
+    const { node, parent, idx } = stack.pop();
+    f(node, parent, idx);
+  }
+}
+
+/**
+ * trim the left and right whitespace, but preserve at most one whitespace if it exist
+ * */
+export function trimText(s: string): string {
+  let t = s.trimLeft();
+  if (t.length !== s.length) {
+    t = s[0] + s.substr(1).trimLeft();
+  }
+  s = t;
+  t = s.trimRight();
+  if (t.length !== s.length) {
+    t = s.substr(0, s.length - 1).trimRight() + s[s.length - 1];
+  }
+  return t;
+}
+
+type ForCharResult = 'stop' | 'skip' | { res: string; stop?: boolean };
 
 function forChar(
   html: string,
@@ -54,6 +92,9 @@ function forChar(
         if (res && res.res) {
           html = res.res;
           i = -1;
+          if (res.stop) {
+            break main;
+          }
         }
       }
     }
@@ -61,7 +102,32 @@ function forChar(
   return { res: html.substr(i) };
 }
 
+function assert(b: boolean, error) {
+  if (!b) {
+    throw error;
+  }
+}
+
+function newObject<T>(o: T): T {
+  return new (o.constructor as any)();
+}
+
 export class Text extends Node {
+  outerHTML: string;
+
+  clone(): this {
+    const node = newObject(this);
+    node.outerHTML = this.outerHTML;
+    node.childNodes = node.childNodes
+      ? this.childNodes.slice()
+      : this.childNodes;
+    return node;
+  }
+
+  get minifiedOuterHTML(): string {
+    return trimText(this.outerHTML);
+  }
+
   static parse(html: string): ParseResult<Text> {
     let acc = '';
     const { res } = forChar(html, c => {
@@ -81,15 +147,13 @@ export class Text extends Node {
   }
 }
 
-function assert(b: boolean, error) {
-  if (!b) {
-    throw error;
-  }
-}
-
 function parseTagName(html: string): ParseResult<string> {
   if (html[0] === '!') {
     throw new Error('expect non-command opening');
+  }
+  if (html[0] === '/') {
+    console.error('html:', html.substr(0, 20));
+    throw new Error('expect non-closing-tag');
   }
   let name = '';
   const { res } = forChar(html, c => {
@@ -154,6 +218,24 @@ function parseAttrValue(html: string): ParseResult<string> {
     case '"':
     case "'":
       return parseString(html, c);
+    case '/': {
+      let acc = c;
+      const { res } = forChar(html.substr(1), (c, i, html) => {
+        if (c.trim().length === 0) {
+          return 'stop';
+        }
+        if (c === '>') {
+          return 'stop';
+        }
+        if (c === '/' && html[i + 1] === '>') {
+          acc += c;
+          // return { res: html.substr(i + 1) ,stop:true}
+          return 'stop';
+        }
+        acc += c;
+      });
+      return { res, data: acc };
+    }
     default:
       return parseTagName(html);
   }
@@ -168,6 +250,15 @@ class Attributes extends Node {
   // to preserve spaces
   attrs: Array<Attr | string> = [];
 
+  clone(): this {
+    const node = newObject(this);
+    node.attrs = this.attrs.slice();
+    node.childNodes = node.childNodes
+      ? this.childNodes.slice()
+      : this.childNodes;
+    return node;
+  }
+
   get outerHTML(): string {
     let html = '';
     this.attrs.forEach(attrOrSpace => {
@@ -181,6 +272,21 @@ class Attributes extends Node {
         if (typeof value === 'string') {
           html += '=' + value;
         }
+      }
+    });
+    return html;
+  }
+
+  get minifiedOuterHTML(): string {
+    let html = '';
+    this.attrs.forEach(attr => {
+      if (typeof attr === 'string') {
+        return;
+      }
+      const { name, value } = attr;
+      html += ' ' + name;
+      if (typeof value === 'string') {
+        html += '=' + value;
       }
     });
     return html;
@@ -213,41 +319,41 @@ class Attributes extends Node {
     }
     return value;
   }
-}
 
-function parseTagAttrs(html: string): ParseResult<Attributes> {
-  const attributes = new Attributes();
-  const { res } = forChar(html, (c, i, html) => {
-    switch (c) {
-      case ' ':
-      case '\n':
-        attributes.attrs.push(c);
-        break;
-      case '/':
-      case '>':
-        return 'stop';
-      default: {
-        let attr: Attr;
-        {
-          html = html.substr(i);
-          const { res, data } = parseAttrName(html);
-          attr = {
-            name: data,
-          };
-          html = res;
+  static parse(html: string): ParseResult<Attributes> {
+    const attributes = new Attributes();
+    const { res } = forChar(html, (c, i, html) => {
+      switch (c) {
+        case ' ':
+        case '\n':
+          attributes.attrs.push(c);
+          break;
+        case '/':
+        case '>':
+          return 'stop';
+        default: {
+          let attr: Attr;
+          {
+            html = html.substr(i);
+            const { res, data } = parseAttrName(html);
+            attr = {
+              name: data,
+            };
+            html = res;
+          }
+          if (html[0] === '=') {
+            html = html.substr(1);
+            const { res, data } = parseAttrValue(html);
+            attr.value = data;
+            html = res;
+          }
+          attributes.attrs.push(attr);
+          return { res: html };
         }
-        if (html[0] === '=') {
-          html = html.substr(1);
-          const { res, data } = parseAttrValue(html);
-          attr.value = data;
-          html = res;
-        }
-        attributes.attrs.push(attr);
-        return { res: html };
       }
-    }
-  });
-  return { res, data: attributes };
+    });
+    return { res, data: attributes };
+  }
 }
 
 function noBody(tagName: string) {
@@ -274,12 +380,17 @@ function parseHTMLElementHead(html: string): ParseResult<HTMLElement> {
   const node = new HTMLElement();
   /* tslint:enable:no-use-before-declare */
   {
+    if (html[0] === '/') {
+      // extra closing tag, invalid html
+      node.extraClosing = true;
+      html = html.substr(1);
+    }
     const { res, data } = parseTagName(html);
     node.tagName = data;
     html = res;
   }
   {
-    const { res, data } = parseTagAttrs(html);
+    const { res, data } = Attributes.parse(html);
     node.attributes = data;
     html = res;
   }
@@ -331,12 +442,28 @@ export function isAnyTagName(node: Node, tagNames: string[]) {
 
 export class HTMLElement extends Node {
   tagName: string;
-  noBody = false;
+  noBody?: boolean;
   attributes: Attributes;
   /* auto repair */
   notClosed = true;
+  extraClosing?: boolean;
+
+  clone(): this {
+    const node = newObject(this);
+    node.tagName = this.tagName;
+    node.noBody = this.noBody;
+    node.attributes = this.attributes.clone();
+    node.notClosed = this.notClosed;
+    node.childNodes = node.childNodes
+      ? this.childNodes.slice()
+      : this.childNodes;
+    return node;
+  }
 
   get outerHTML(): string {
+    if (this.extraClosing) {
+      return config.autoRepair ? '' : `</${this.tagName}>`;
+    }
     let html = `<${this.tagName}`;
     html += this.attributes.outerHTML;
     if (this.noBody) {
@@ -345,6 +472,26 @@ export class HTMLElement extends Node {
     }
     html += '>';
     (this.childNodes || []).forEach(node => (html += node.outerHTML));
+    if (!noBody(this.tagName) && (config.autoRepair || !this.notClosed)) {
+      html += `</${this.tagName}>`;
+    }
+    return html;
+  }
+
+  get minifiedOuterHTML(): string {
+    if (this.extraClosing) {
+      return '';
+    }
+    let html = `<${this.tagName}`;
+    html += this.attributes.minifiedOuterHTML;
+    if (this.noBody) {
+      html += '/>';
+      return html;
+    }
+    html += '>';
+    if (this.childNodes) {
+      this.childNodes.forEach(node => (html += node.minifiedOuterHTML));
+    }
     if (!noBody(this.tagName) && (config.autoRepair || !this.notClosed)) {
       html += `</${this.tagName}>`;
     }
@@ -360,7 +507,7 @@ export class HTMLElement extends Node {
   }
 
   /**
-   * @param tagName assume to be in lower case
+   * @param tagNames assume to be in lower case
    * TODO optimize this part if possible
    * */
   isAnyTagName(tagNames: string[]): boolean {
@@ -433,10 +580,19 @@ export class HTMLElement extends Node {
             break;
           } else {
             // auto repair close
+            const { res, data } = HTMLElement.parse(html);
+            if (data instanceof HTMLElement) {
+              if (noBody(data.tagName)) {
+                node.childNodes.push(data);
+                html = res;
+                continue;
+              }
+            }
             node.notClosed = true;
             if (config.debug) {
               console.log('auto repair:', node);
             }
+
             break;
           }
         } else {
@@ -471,6 +627,13 @@ class Command extends HTMLElement {
     return html;
   }
 
+  get minifiedOuterHTML(): string {
+    let html = `<!${this.tagName}`;
+    html += this.attributes.minifiedOuterHTML;
+    html += '>';
+    return html;
+  }
+
   static parse(html: string): ParseResult<HTMLElement> {
     assert(html[0] === '<', `expect open command tag ${s('<')}`);
     assert(html[1] === '!', `expect open command prefix ${s('<!')}`);
@@ -482,7 +645,7 @@ class Command extends HTMLElement {
       html = res;
     }
     {
-      const { res, data } = parseTagAttrs(html);
+      const { res, data } = Attributes.parse(html);
       command.attributes = data;
       html = res;
     }
@@ -495,8 +658,21 @@ class Command extends HTMLElement {
 export class Comment extends Command {
   content: string;
 
+  clone(): this {
+    const node = newObject(this);
+    node.content = this.content;
+    node.childNodes = node.childNodes
+      ? this.childNodes.slice()
+      : this.childNodes;
+    return node;
+  }
+
   get outerHTML(): string {
     return `<!--${this.content}-->`;
+  }
+
+  get minifiedOuterHTML(): string {
+    return '';
   }
 
   static parse(html: string): ParseResult<Comment> {
@@ -567,8 +743,19 @@ function parseStyleBody(
   return { res, data: acc };
 }
 
-abstract class DSLELement extends HTMLElement {
+abstract class DSLElement extends HTMLElement {
   textContent: string;
+  abstract minifiedTextContent: string;
+
+  clone(): this {
+    const node = newObject(this);
+    console.log('clone DSL', this);
+    node.textContent = this.textContent;
+    node.childNodes = node.childNodes
+      ? this.childNodes.slice()
+      : this.childNodes;
+    return node;
+  }
 
   get outerHTML(): string {
     let html = `<${this.tagName}`;
@@ -582,9 +769,57 @@ abstract class DSLELement extends HTMLElement {
     html += `</${this.tagName}>`;
     return html;
   }
+
+  get minifiedOuterHTML(): string {
+    let html = `<${this.tagName}`;
+    html += this.attributes.minifiedOuterHTML;
+    if (this.noBody) {
+      html += '/>';
+      return html;
+    }
+    html += '>';
+    html += this.minifiedTextContent;
+    html += `</${this.tagName}>`;
+    return html;
+  }
 }
 
-class Style extends DSLELement {}
+class Style extends DSLElement {
+  get minifiedTextContent(): string {
+    let acc = '';
+    forChar(this.textContent, (c, i, html) => {
+      switch (c) {
+        case '/': {
+          if (html[i + 1] === '*') {
+            i += 2;
+            let end = html.indexOf('*/', i);
+            if (end === -1) {
+              end = html.length;
+            }
+            return { res: html.substr(end) };
+          }
+          acc += c;
+          break;
+        }
+        case '"':
+        case "'": {
+          const { res, data } = parseString(html.substr(i), c);
+          acc += data;
+          return { res };
+        }
+        default: {
+          if (
+            c.trim().length !== 0 ||
+            acc[acc.length - 1].trim().length !== 0
+          ) {
+            acc += c;
+          }
+        }
+      }
+    });
+    return acc;
+  }
+}
 
 function continueParseStyleFromHTMLElement(
   html: string,
@@ -608,7 +843,73 @@ function continueParseStyleFromHTMLElement(
   return { res: html, data: style };
 }
 
-class Script extends DSLELement {}
+class Script extends DSLElement {
+  get minifiedTextContent(): string {
+    let acc = '';
+    forChar(this.textContent, (c, i, html) => {
+      switch (c) {
+        case '/': {
+          const nextC = html[i + 1];
+          if (nextC === '/') {
+            let end = html.indexOf('\n', i);
+            if (end === -1) {
+              end = html.length;
+            }
+            return { res: html.substr(end) };
+          }
+          if (nextC === '*') {
+            let end = html.indexOf('*/', i);
+            if (end === -1) {
+              end = html.length;
+            }
+            return { res: html.substr(end) };
+          }
+          acc += c;
+          break;
+        }
+        case '"':
+        case "'": {
+          const { res, data } = parseString(html, c);
+          acc += data;
+          return { res };
+        }
+        case '`': {
+          const { res, data } = parseStringWithDashQuote(html);
+          acc += data;
+          return { res };
+        }
+        default: {
+          if (
+            acc.length === 0 ||
+            c.trim().length !== 0 ||
+            acc[acc.length - 1].trim().length !== 0
+          ) {
+            acc += c;
+          }
+        }
+      }
+    });
+    return acc;
+  }
+}
+
+function parseStringWithDashQuote(html: string): ParseResult<string> {
+  assert(html[0] === '`', 'expect string with dash quote starting quote');
+  let acc = '';
+  const { res } = forChar(html.substr(1), (c, i, html) => {
+    if (c === '$' && html[i + 1] === '{') {
+      const { res, data } = parseScriptBody(html.substr(2), '}');
+      acc += '$' + data;
+      return { res };
+    }
+    if (c === '`') {
+      return 'stop';
+    }
+    acc += c;
+  });
+  acc = '`' + acc + '`';
+  return { res: res.substr(1), data: acc };
+}
 
 function parseScriptBody(
   html: string,
@@ -620,6 +921,11 @@ function parseScriptBody(
       case '"':
       case "'": {
         const { res, data } = parseString(html.substr(i), c);
+        acc += data;
+        return { res };
+      }
+      case '`': {
+        const { res, data } = parseStringWithDashQuote(html);
         acc += data;
         return { res };
       }
@@ -700,9 +1006,23 @@ function continueParseScriptFromHTMLElement(
   return { res: html, data: script };
 }
 
-class Document extends HTMLElement {
+export class Document extends Node {
+  childNodes: Node[] = [];
+
+  clone(): this {
+    const node = newObject(this);
+    node.childNodes = node.childNodes
+      ? this.childNodes.slice()
+      : this.childNodes;
+    return node;
+  }
+
   get outerHTML(): string {
     return this.childNodes.map(node => node.outerHTML).join('');
+  }
+
+  get minifiedOuterHTML(): string {
+    return this.childNodes.map(node => node.minifiedOuterHTML).join('');
   }
 
   static parse(html: string): ParseResult<Node> {
@@ -732,7 +1052,7 @@ function parse<T extends Node>(
   if (config.dev) {
     console.log(prefix + 'enter context:', context.name);
   }
-  if (config.debug) {
+  if (config.debugStream) {
     console.log('|>>>:html(first-10)|', html.substr(0, 10), '|html:<<<|');
     /*
     console.log({
@@ -749,7 +1069,7 @@ function parse<T extends Node>(
   if (config.dev) {
     console.log(prefix + 'leave context:', context.name);
   }
-  if (config.debug) {
+  if (config.debugStream) {
     console.log('|>>>:res(first-10)|', res.res.substr(0, 10), '|res:<<<|');
     console.log('|>>>:data|');
     logNode(res.data);
@@ -764,7 +1084,6 @@ export function parseHtmlDocument(html: string, skipTrim = false): Document {
     html = html.trimLeft();
   }
   const root = new Document();
-  root.childNodes = [];
   for (; html.length > 0; ) {
     const c = html[0];
     const p = (context: NodeConstructor<any>) => {
@@ -806,5 +1125,15 @@ export function logNode(node: Node) {
   console.log(JSON.stringify(wrapNode(node), null, 2));
 }
 
-/* tslint:disable:no-use-before-declare */
-/* tslint:enable:no-use-before-declare */
+// for easy reference
+export let NodeClasses: Array<typeof Node> = [
+  Text,
+  Attributes,
+  HTMLElement,
+  Command,
+  Comment,
+  DSLElement,
+  Style,
+  Script,
+  Document,
+];

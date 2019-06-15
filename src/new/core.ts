@@ -1,4 +1,3 @@
-import * as fs from 'fs';
 import {
   defaultSkipTags,
   MinifyHTMLOptions,
@@ -9,20 +8,37 @@ import {
 } from '../core';
 import {
   Comment,
-  config,
+  Document,
   HTMLElement,
   isAnyTagName,
+  Node,
   parseHtmlDocument,
   Text,
   walkNode,
-  wrapNode,
+  walkNodeReversed,
 } from './parser';
 
-export function minifyHTML(html: string, options: MinifyHTMLOptions): string {
-  if (!html) {
-    return '';
+const mergeText = (node: Node) => {
+  if (node.childNodes) {
+    for (let i = node.childNodes.length - 1; i > 0; i--) {
+      const c = node.childNodes[i];
+      const prev = node.childNodes[i - 1];
+      if (c instanceof Text && prev instanceof Text) {
+        prev.outerHTML += c.outerHTML;
+        node.childNodes.splice(i, 1);
+      }
+    }
+    node.childNodes.forEach(node => mergeText(node));
   }
-  const document = parseHtmlDocument(html);
+};
+
+export function minifyDocument(
+  document: Document,
+  options: MinifyHTMLOptions,
+): Document {
+  if (!minifyDocument.skipClone) {
+    document = document.clone();
+  }
   // walkNode(document, node => node.childNodes = node.childNodes || []);
 
   let keepTags: string[] = tag_whitelist.slice();
@@ -116,12 +132,39 @@ export function minifyHTML(html: string, options: MinifyHTMLOptions): string {
       return true;
     });
   });
-  if (config.dev) {
-    fs.writeFileSync(
-      'wrapped-root.json',
-      JSON.stringify(wrapNode(document), null, 2),
-    );
-  }
 
-  return document.outerHTML.trim();
+  walkNodeReversed(document, (node, parent, idx) => {
+    if (node instanceof HTMLElement && node.isTagName('div')) {
+      // remove empty div
+      const minifiedInnerHTML = node.childNodes
+        .map(x => x.minifiedOuterHTML)
+        .join('')
+        .trim();
+      if (minifiedInnerHTML.length === 0) {
+        parent.childNodes.splice(idx, 1);
+        return;
+      }
+      // flatten shallow dom
+      if (node.childNodes.length === 1) {
+        parent.childNodes[idx] = node.childNodes[0];
+      }
+    }
+  });
+
+  // merge text elements, this is possible because original elements in the middle may be removed
+  mergeText(document);
+
+  return document;
+}
+
+export namespace minifyDocument {
+  export let skipClone = true;
+}
+
+export function minifyHTML(html: string, options: MinifyHTMLOptions): string {
+  if (!html) {
+    return '';
+  }
+  const document = parseHtmlDocument(html);
+  return minifyDocument(document, options).minifiedOuterHTML;
 }

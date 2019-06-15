@@ -1,7 +1,9 @@
 import { unescape } from 'querystring';
-import { saveFile } from './utils';
+import * as util from 'util';
+import { saveFile, testFile, testUrl } from './utils';
 import { MinifyHTMLOptions } from '../src/core';
-import { minifyHTML } from '../src/new/core';
+import { minifyDocument } from '../src/new/core';
+import { parseHtmlDocument, wrapNode } from '../src/new/parser';
 
 const fetch = require('node-fetch');
 
@@ -18,30 +20,44 @@ url = 'https://hkuspace.hku.hk/#';
 url = 'https://hk.search.yahoo.com/search;_ylt=A2oKmJX33KJaSUQAywWzygt.;_ylc=X1MDMjExNDcwMjAwMwRfcgMyBGZyA3lmcC1zZWFyY2gtdG4EZ3ByaWQDSGh6MDVEVUFRTEN4ZkJ1OWFDQ2I1QQRuX3JzbHQDMARuX3N1Z2cDMTAEb3JpZ2luA2hrLnNlYXJjaC55YWhvby5jb20EcG9zAzAEcHFzdHIDBHBxc3RybAMwBHFzdHJsAzYEcXVlcnkDc2VhcmNoBHRfc3RtcAMxNTIwNjIyNzg0?p=search&fr2=sb-top&fr=yfp-search-tn';
 url = 'https://hk.news.yahoo.com/%E8%B2%AA%E7%8E%A9%E7%94%9F%E5%90%9E%E9%BC%BB%E6%B6%95%E8%9F%B2-%E6%BE%B3%E6%B4%B2%E9%9D%92%E5%B9%B4%E6%9F%93%E5%AF%84%E7%94%9F%E8%9F%B2%E8%87%B4%E7%99%B1%E7%98%93-064100120.html';
 url = 'http://yahoo.hk';
-url = 'https://www.jessicahk.com/articles/qing-gan-ce-shi-kan-ni-shi-fou-hao-se-nu';
+// url = 'https://www.jessicahk.com/articles/qing-gan-ce-shi-kan-ni-shi-fou-hao-se-nu';
 
 let options: MinifyHTMLOptions = {
-  // textDecorator: debugTextDecorator
-  theme: 'dark'
-  // theme: 'light'
-  // theme: 'console'
-  , skipTags: [
-    'script'
-    , 'style'
-    , 'link',
-  ]
-  , url: url
-  , hrefPrefix: 'https://minweb.surge.sh?url=',
-  // , article_mode: true
-  // , text_mode: true
+  // textDecorator: debugTextDecorator,
+  theme: 'dark',
+  // theme: 'light',
+  // theme: 'console',
+  skipTags: [
+    'script',
+    'style',
+    'link',
+    'iframe',
+  ],
+  url: url,
+  hrefPrefix: 'https://minweb.surge.sh?url=',
+  // article_mode: true,
+  // text_mode: true,
 };
 
-fetch(url)
-  .then(res => res.text())
-  .then(html => {
-    let ps = [];
-    ps.push(saveFile('in.html', html));
-    let minifiedHtml = minifyHTML(html, options);
-    ps.push(saveFile('out.html', minifiedHtml));
-    return Promise.all(ps);
-  });
+function test(html: string, filename: string): Promise<any> {
+  let ps = [];
+
+  ps.push(saveFile('in.html', html));
+
+  let document = parseHtmlDocument(html);
+  ps.push(saveFile('in-root.json', JSON.stringify(wrapNode(document), null, 2)));
+  ps.push(saveFile('in-root.txt', util.inspect(document, { depth: 999 })));
+
+  minifyDocument.skipClone = false;
+  let minifiedDocument = minifyDocument(document, options);
+  ps.push(saveFile('out-root.json', JSON.stringify(wrapNode(minifiedDocument), null, 2)));
+  ps.push(saveFile('out-root.txt', util.inspect(minifiedDocument, { depth: 999 })));
+
+  ps.push(saveFile('out.html', minifiedDocument.minifiedOuterHTML));
+
+  return Promise.all(ps);
+}
+
+testUrl(test, url);
+// testFile(test, 'demo/input.html');
+

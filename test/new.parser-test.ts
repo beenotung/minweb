@@ -49,6 +49,7 @@ async function test(html: string, name: string) {
 }
 
 testFile(test, 'demo/a.html');
+testFile(test,'demo/input.html');
 testFile(test, 'demo/mobile.html');
 testFile(test, 'demo/comment.html');
 testFile(test, 'demo/not-closed.html');
