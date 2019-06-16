@@ -16,7 +16,6 @@ async function test(html: string, name: string) {
 
   const restructuredHtml = root.outerHTML;
   if (restructuredHtml !== html) {
-    // if ('dev') {
     console.log('not matched:', name);
     if (logTo.file) {
       await Promise.all([
@@ -53,6 +52,8 @@ testFile(test,'demo/input.html');
 testFile(test, 'demo/mobile.html');
 testFile(test, 'demo/comment.html');
 testFile(test, 'demo/not-closed.html');
+testFile(test, 'demo/wrongly-closed-not-match-parent.html');
+testFile(test, 'demo/wrongly-closed-match-parent.html');
 testFile(test, 'demo/style.html');
 testFile(test, 'demo/script.html');
 testFile(test, 'demo/link.html');
