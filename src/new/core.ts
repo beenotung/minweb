@@ -116,7 +116,7 @@ export function minifyDocument(
             element.attributes.attrs = [{ name: 'href', value: src }];
             element.noBody = false;
             element.notClosed = false;
-            const text = new Text();
+            const text = new Text(element);
             text.outerHTML = 'iframe: ' + src;
             element.childNodes = [text];
             return true;

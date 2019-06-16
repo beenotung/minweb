@@ -17,8 +17,27 @@ export abstract class Node {
   abstract outerHTML: string;
   abstract minifiedOuterHTML: string;
   childNodes?: Node[];
-  // TODO use parentNode to distinct auto close and extra closing
-  //  abstract parentNode:Node;
+
+  constructor(public parentNode: Node) {
+    if (!parentNode) {
+      return;
+    }
+    if (parentNode.childNodes) {
+      parentNode.childNodes.push(this);
+    } else {
+      parentNode.childNodes = [this];
+    }
+  }
+
+  toJSON() {
+    const res = {
+      ...this,
+      parentNode: undefined,
+    };
+    delete res.childNodes;
+    res.childNodes = this.childNodes;
+    return res;
+  }
 
   abstract clone(): this;
 }
@@ -26,9 +45,9 @@ export abstract class Node {
 export interface NodeConstructor<T extends Node> {
   name: string;
 
-  new (): T;
+  new (parent: Node): T;
 
-  parse(html: string): ParseResult<T>;
+  parse(html: string, parent: Node): ParseResult<T>;
 }
 
 export function walkNode(
@@ -110,15 +129,17 @@ function assert(b: boolean, error) {
   }
 }
 
-function newObject<T>(o: T): T {
-  return new (o.constructor as any)();
+function newNode<T extends Node>(node: T): T {
+  const newNode = new (node.constructor as any)(node.parentNode);
+  // newNode.parentNode.childNodes.pop()
+  return newNode;
 }
 
 export class Text extends Node {
   outerHTML: string;
 
   clone(): this {
-    const node = newObject(this);
+    const node = newNode(this);
     node.outerHTML = this.outerHTML;
     node.childNodes = node.childNodes
       ? this.childNodes.slice()
@@ -130,7 +151,7 @@ export class Text extends Node {
     return trimText(this.outerHTML);
   }
 
-  static parse(html: string): ParseResult<Text> {
+  static parse(html: string, parent: Node): ParseResult<Text> {
     let acc = '';
     const { res } = forChar(html, c => {
       switch (c) {
@@ -140,7 +161,7 @@ export class Text extends Node {
           acc += c;
       }
     });
-    const node = new Text();
+    const node = new Text(parent);
     node.outerHTML = acc;
     return {
       res,
@@ -252,8 +273,13 @@ class Attributes extends Node {
   // to preserve spaces
   attrs: Array<Attr | string> = [];
 
+  constructor(parent: Node) {
+    super(parent);
+    parent.childNodes.pop();
+  }
+
   clone(): this {
-    const node = newObject(this);
+    const node = newNode(this);
     node.attrs = this.attrs.slice();
     node.childNodes = node.childNodes
       ? this.childNodes.slice()
@@ -322,8 +348,8 @@ class Attributes extends Node {
     return value;
   }
 
-  static parse(html: string): ParseResult<Attributes> {
-    const attributes = new Attributes();
+  static parse(html: string, parent: Node): ParseResult<Attributes> {
+    const attributes = new Attributes(parent);
     const { res } = forChar(html, (c, i, html) => {
       switch (c) {
         case ' ':
@@ -375,16 +401,20 @@ function noBody(tagName: string) {
 /**
  * parse until the body of the element (not recursively)
  * */
-function parseHTMLElementHead(html: string): ParseResult<HTMLElement> {
+function parseHTMLElementHead(
+  html: string,
+  parent: Node,
+): ParseResult<HTMLElement> {
   assert(html[0] === '<', 'expect tag open bracket');
+  // assert(html[1]!=='/',new Error('expect tag name'));
   html = html.substr(1);
   /* tslint:disable:no-use-before-declare */
-  const node = new HTMLElement();
+  const node = new HTMLElement(parent);
   /* tslint:enable:no-use-before-declare */
   {
     if (html[0] === '/') {
-      // extra closing tag, invalid html
       node.extraClosing = true;
+      node.noBody = true;
       html = html.substr(1);
     }
     const { res, data } = parseTagName(html);
@@ -392,7 +422,7 @@ function parseHTMLElementHead(html: string): ParseResult<HTMLElement> {
     html = res;
   }
   {
-    const { res, data } = Attributes.parse(html);
+    const { res, data } = Attributes.parse(html, node);
     node.attributes = data;
     html = res;
   }
@@ -447,17 +477,18 @@ export class HTMLElement extends Node {
   noBody?: boolean;
   attributes: Attributes;
   /* auto repair */
+  notOpened?: boolean;
   notClosed = true;
   extraClosing?: boolean;
 
   clone(): this {
-    const node = newObject(this);
+    const node = newNode(this);
     node.tagName = this.tagName;
     node.noBody = this.noBody;
     node.attributes = this.attributes.clone();
     node.notClosed = this.notClosed;
     node.childNodes = node.childNodes
-      ? this.childNodes.slice()
+      ? this.childNodes.map(node => node.clone())
       : this.childNodes;
     return node;
   }
@@ -466,13 +497,16 @@ export class HTMLElement extends Node {
     if (this.extraClosing) {
       return config.autoRepair ? '' : `</${this.tagName}>`;
     }
-    let html = `<${this.tagName}`;
-    html += this.attributes.outerHTML;
-    if (this.noBody) {
-      html += '/>';
-      return html;
+    let html = '';
+    if (!this.notOpened) {
+      html += `<${this.tagName}`;
+      html += this.attributes.outerHTML;
+      if (this.noBody) {
+        html += '/>';
+        return html;
+      }
+      html += '>';
     }
-    html += '>';
     (this.childNodes || []).forEach(node => (html += node.outerHTML));
     if (!noBody(this.tagName) && (config.autoRepair || !this.notClosed)) {
       html += `</${this.tagName}>`;
@@ -550,18 +584,28 @@ export class HTMLElement extends Node {
     return f(this);
   }
 
-  static parse(html: string /* TODO ,parent:Node*/): ParseResult<Node> {
+  hasParentElementByTagName(tagName: string): boolean {
+    tagName = tagName.toLowerCase();
+    for (let node = this.parentNode; node; node = node.parentNode) {
+      if (node instanceof HTMLElement && node.isTagName(tagName)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static parse(html: string, parent: Node): ParseResult<Node> {
     // const originalHtml = html;
     let node: HTMLElement;
     {
-      const { res, data } = parseHTMLElementHead(html);
-      if (data instanceof HTMLElement) {
-        if (data.extraClosing) {
-          // TODO distinct auto closing and extra closing
-        }
-      }
+      const { res, data } = parseHTMLElementHead(html, parent);
       node = data;
       html = res;
+    }
+    if (node instanceof HTMLElement) {
+      if (node.extraClosing) {
+        return { res: html, data: node };
+      }
     }
     if (node.tagName.toLowerCase() === 'style') {
       return continueParseStyleFromHTMLElement(html, node);
@@ -587,13 +631,59 @@ export class HTMLElement extends Node {
             break;
           } else {
             // auto repair close
-            const { res, data } = HTMLElement.parse(html);
+            const { res, data } = HTMLElement.parse(html, node);
             if (data instanceof HTMLElement) {
-              if (noBody(data.tagName)) {
-                node.childNodes.push(data);
+              assert(
+                data.extraClosing,
+                new Error('expect to repair extra closing'),
+              );
+              if (data.hasParentElementByTagName(data.tagName)) {
+                // auto closing parent, then re-open
+                node.childNodes.pop();
+                const repairingTagName = data.tagName.toLowerCase();
+                let repairingNodeParent: Node;
+                for (
+                  let nodeAcc = node.parentNode;
+                  nodeAcc;
+                  nodeAcc = nodeAcc.parentNode
+                ) {
+                  if (nodeAcc instanceof HTMLElement) {
+                    nodeAcc.notClosed = true;
+                    if (nodeAcc.isTagName(repairingTagName)) {
+                      // this is the matching parent parent
+                      nodeAcc.notClosed = false;
+                      repairingNodeParent = nodeAcc.parentNode;
+                    }
+                    // still need to travel up-ward
+                  }
+                }
+                const reopenedNode = node.clone();
+                reopenedNode.parentNode.childNodes.pop();
+                reopenedNode.childNodes = [];
+                // reopenedNode.parentNode = repairingNodeParent;
+                // reopenedNode.parentNode.childNodes.push(reopenedNode);
+                const res1 = res;
+                {
+                  const { res, data } = parse(
+                    Document,
+                    reopenedNode.outerHTML + res1,
+                    repairingNodeParent,
+                  );
+                  if (data instanceof HTMLElement) {
+                    data.notOpened = true;
+                  }
+                  html = res;
+                }
+                continue;
+              } else {
+                // ignore extra closing
                 html = res;
                 continue;
               }
+            }
+            if (data instanceof HTMLElement && noBody(data.tagName)) {
+              html = res;
+              continue;
             }
             node.notClosed = true;
             if (config.debug) {
@@ -605,15 +695,13 @@ export class HTMLElement extends Node {
         } else {
           // open node
           /* tslint:disable:no-use-before-declare */
-          const { res, data } = parse(Document, html);
+          const { res, data } = parse(Document, html, node);
           /* tslint:enable:no-use-before-declare */
-          node.childNodes.push(data);
           html = res;
         }
       } else {
         // meet body content
-        const { res, data } = parse(Text, html);
-        node.childNodes.push(data);
+        const { res, data } = parse(Text, html, node);
         html = res;
       }
     }
@@ -622,8 +710,8 @@ export class HTMLElement extends Node {
 }
 
 class Command extends HTMLElement {
-  constructor() {
-    super();
+  constructor(parent: Node) {
+    super(parent);
     this.noBody = true;
   }
 
@@ -641,18 +729,18 @@ class Command extends HTMLElement {
     return html;
   }
 
-  static parse(html: string): ParseResult<HTMLElement> {
+  static parse(html: string, parent: Node): ParseResult<HTMLElement> {
     assert(html[0] === '<', `expect open command tag ${s('<')}`);
     assert(html[1] === '!', `expect open command prefix ${s('<!')}`);
     html = html.substr(2);
-    const command = new Command();
+    const command = new Command(parent);
     {
       const { res, data } = parseTagName(html);
       command.tagName = data;
       html = res;
     }
     {
-      const { res, data } = Attributes.parse(html);
+      const { res, data } = Attributes.parse(html, command);
       command.attributes = data;
       html = res;
     }
@@ -666,7 +754,7 @@ export class Comment extends Command {
   content: string;
 
   clone(): this {
-    const node = newObject(this);
+    const node = newNode(this);
     node.content = this.content;
     node.childNodes = node.childNodes
       ? this.childNodes.slice()
@@ -682,7 +770,7 @@ export class Comment extends Command {
     return '';
   }
 
-  static parse(html: string): ParseResult<Comment> {
+  static parse(html: string, parent: Node): ParseResult<Comment> {
     assert(html[0] === '<', `expect open comment tag ${s('<')}`);
     assert(html[1] === '!', `expect open comment prefix ${s('!')}`);
     assert(html[2] === '-', `expect open comment prefix ${s('-')}`);
@@ -707,7 +795,7 @@ export class Comment extends Command {
     assert(html[1] === '-', `expect close comment suffix ${s('-')}`);
     assert(html[2] === '>', `expect close comment suffix ${s('>')}`);
     html = html.substr(3);
-    const comment = new Comment();
+    const comment = new Comment(parent);
     comment.content = acc;
     return { res: html, data: comment };
   }
@@ -755,8 +843,7 @@ abstract class DSLElement extends HTMLElement {
   abstract minifiedTextContent: string;
 
   clone(): this {
-    const node = newObject(this);
-    console.log('clone DSL', this);
+    const node = newNode(this);
     node.textContent = this.textContent;
     node.childNodes = node.childNodes
       ? this.childNodes.slice()
@@ -832,7 +919,7 @@ function continueParseStyleFromHTMLElement(
   html: string,
   node: HTMLElement,
 ): ParseResult<Style> {
-  const style = new Style();
+  const style = new Style(node.parentNode);
   Object.assign(style, node);
   if (style.noBody) {
     return { res: html, data: style };
@@ -988,7 +1075,7 @@ function continueParseScriptFromHTMLElement(
   html: string,
   node: HTMLElement,
 ): ParseResult<Script> {
-  const script = new Script();
+  const script = new Script(node.parentNode);
   Object.assign(script, node);
   if (script.noBody) {
     return { res: html, data: script };
@@ -1016,8 +1103,12 @@ function continueParseScriptFromHTMLElement(
 export class Document extends Node {
   childNodes: Node[] = [];
 
+  constructor() {
+    super(null);
+  }
+
   clone(): this {
-    const node = newObject(this);
+    const node = newNode(this);
     node.childNodes = node.childNodes
       ? this.childNodes.slice()
       : this.childNodes;
@@ -1032,20 +1123,20 @@ export class Document extends Node {
     return this.childNodes.map(node => node.minifiedOuterHTML).join('');
   }
 
-  static parse(html: string): ParseResult<Node> {
+  static parse(html: string, parent: Node): ParseResult<Node> {
     if (html[0] === '<') {
       if (html[1] === '!') {
         if (html[2] === '-' && html[2] === '-') {
-          return parse(Comment, html);
+          return parse(Comment, html, parent);
         }
         // not '<!--'
-        return parse(Command, html);
+        return parse(Command, html, parent);
       }
       // not '<!'
-      return parse(HTMLElement, html);
+      return parse(HTMLElement, html, parent);
     }
     // not '<'
-    return parse(Text, html);
+    return parse(Text, html, parent);
   }
 }
 
@@ -1054,6 +1145,7 @@ let parseLevel = 0;
 function parse<T extends Node>(
   context: NodeConstructor<T>,
   html: string,
+  parent: Node,
 ): ParseResult<T> {
   const prefix = ' '.repeat(parseLevel * 2);
   if (config.dev) {
@@ -1071,7 +1163,7 @@ function parse<T extends Node>(
     */
   }
   parseLevel++;
-  const res = context.parse(html);
+  const res = context.parse(html, parent);
   parseLevel--;
   if (config.dev) {
     console.log(prefix + 'leave context:', context.name);
@@ -1094,8 +1186,7 @@ export function parseHtmlDocument(html: string, skipTrim = false): Document {
   for (; html.length > 0; ) {
     const c = html[0];
     const p = (context: NodeConstructor<any>) => {
-      const { res, data } = parse(context, html);
-      root.childNodes.push(data);
+      const { res, data } = parse(context, html, root);
       html = res;
     };
     switch (c) {
@@ -1117,14 +1208,14 @@ export function wrapNode(node: Node) {
   const constructor = ((node as any) as HTMLElement)
     .constructor as NodeConstructor<any>;
   const name = constructor.name;
+  const nodeJson = node.toJSON();
+  if (node.childNodes) {
+    delete nodeJson.childNodes;
+    nodeJson.childNodes = node.childNodes.map(node => wrapNode(node)) as any[];
+  }
   return {
     name,
-    node: {
-      ...node,
-      childNodes: node.childNodes
-        ? node.childNodes.map(node => wrapNode(node))
-        : [],
-    },
+    node: nodeJson,
   };
 }
 

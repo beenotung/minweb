@@ -25,6 +25,8 @@ when unexpected closing tag is saw
     ignore the unexpected closing tag
 ```
 
+WIP: working on auto fix, but broken other normal test cases
+
 == todo
 - [ ] support filtering features
    * [ ] text-only
