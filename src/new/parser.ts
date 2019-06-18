@@ -640,7 +640,7 @@ export class HTMLElement extends Node {
   }
 }
 
-class Command extends HTMLElement {
+export class Command extends HTMLElement {
   constructor() {
     super();
     this.noBody = true;

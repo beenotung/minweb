@@ -7,6 +7,7 @@ import {
   textonly_tag_blackList,
 } from '../core';
 import {
+  Command,
   Comment,
   Document,
   HTMLElement,
@@ -96,7 +97,7 @@ export function minifyDocument(
       }
 
       if (options.text_mode) {
-        if (node instanceof Text) {
+        if (node instanceof Text || node instanceof Command) {
           return true;
         }
         if (
