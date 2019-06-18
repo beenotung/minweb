@@ -4,6 +4,7 @@ import { saveFile, testFile, testUrl } from './utils';
 const logTo = { console: false, file: true };
 
 async function test(html: string, name: string) {
+  // console.log('testing:', name);
   html = html.trim();
   if (logTo.console) {
     console.log('== input html ==');
@@ -48,7 +49,7 @@ async function test(html: string, name: string) {
 }
 
 testFile(test, 'demo/a.html');
-testFile(test,'demo/input.html');
+testFile(test, 'demo/input.html');
 testFile(test, 'demo/mobile.html');
 testFile(test, 'demo/comment.html');
 testFile(test, 'demo/not-closed.html');

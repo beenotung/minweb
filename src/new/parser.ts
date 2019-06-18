@@ -31,6 +31,10 @@ export interface NodeConstructor<T extends Node> {
   parse(html: string): ParseResult<T>;
 }
 
+/* tslint:disable:no-unused-variable */
+const dev = console.log.bind(console, '[dev]');
+/* tslint:enable:no-unused-variable */
+
 export function walkNode(
   node: Node,
   f: (node: Node, parent: Node, idx: number) => void,
@@ -464,7 +468,10 @@ export class HTMLElement extends Node {
 
   get outerHTML(): string {
     if (this.extraClosing) {
-      return config.autoRepair ? '' : `</${this.tagName}>`;
+      return (
+        (config.autoRepair ? '' : `</${this.tagName}>`) +
+        (this.childNodes || []).map(node => node.outerHTML).join('')
+      );
     }
     let html = `<${this.tagName}`;
     html += this.attributes.outerHTML;
@@ -482,7 +489,7 @@ export class HTMLElement extends Node {
 
   get minifiedOuterHTML(): string {
     if (this.extraClosing) {
-      return '';
+      return '' + (this.childNodes || []).map(node => node.outerHTML).join('');
     }
     let html = `<${this.tagName}`;
     html += this.attributes.minifiedOuterHTML;
@@ -587,6 +594,18 @@ export class HTMLElement extends Node {
             break;
           } else {
             // auto repair close
+            if (config.debug) {
+              console.log('auto repair:', {
+                /* tslint:disable:no-use-before-declare */
+                level: parseLevel,
+                /* tslint:enable:no-use-before-declare */
+                expect: selfCloseTagHtml,
+                html: html
+                  .substr(0, 10)
+                  .replace(/>.*/g, '>')
+                  .split('\n')[0],
+              });
+            }
             const { res, data } = HTMLElement.parse(html);
             if (data instanceof HTMLElement) {
               if (noBody(data.tagName)) {
