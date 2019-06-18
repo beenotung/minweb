@@ -32,7 +32,7 @@ export interface NodeConstructor<T extends Node> {
 }
 
 /* tslint:disable:no-unused-variable */
-const dev = console.log.bind(console, '[dev]');
+const dev = console.log.bind(console, '[parser]');
 /* tslint:enable:no-unused-variable */
 
 export function walkNode(
@@ -42,7 +42,9 @@ export function walkNode(
   idx = -1,
 ) {
   f(node, parent, idx);
-  node.childNodes.forEach((child, idx) => walkNode(child, f, node, idx));
+  if (node.childNodes) {
+    node.childNodes.forEach((child, idx) => walkNode(child, f, node, idx));
+  }
 }
 
 export function walkNodeReversed(
@@ -247,12 +249,12 @@ function parseAttrValue(html: string): ParseResult<string> {
   }
 }
 
-interface Attr {
+export interface Attr {
   name: string;
   value?: string;
 }
 
-class Attributes extends Node {
+export class Attributes extends Node {
   // to preserve spaces
   attrs: Array<Attr | string> = [];
 
@@ -296,6 +298,14 @@ class Attributes extends Node {
       }
     });
     return html;
+  }
+
+  forEachAttr(f: (attr: Attr) => void) {
+    this.attrs.forEach(attr => {
+      if (typeof attr === 'object') {
+        f(attr);
+      }
+    });
   }
 
   hasName(name: string): boolean {
@@ -434,13 +444,13 @@ function parseHTMLElementTail(
   return { res: html, data: void 0 };
 }
 
-export function isTagName(node: Node, tagName: string) {
+export function isTagName(node: Node, tagName: string): boolean {
   /* tslint:disable:no-use-before-declare */
   return node instanceof HTMLElement && node.isTagName(tagName);
   /* tslint:enable:no-use-before-declare */
 }
 
-export function isAnyTagName(node: Node, tagNames: string[]) {
+export function isAnyTagName(node: Node, tagNames: string[]): boolean {
   /* tslint:disable:no-use-before-declare */
   return node instanceof HTMLElement && node.isAnyTagName(tagNames);
   /* tslint:enable:no-use-before-declare */
@@ -535,6 +545,9 @@ export class HTMLElement extends Node {
     );
   }
 
+  /**
+   * including this element
+   * */
   getElementsByTagName(tagName: string): HTMLElement[] {
     const elements: HTMLElement[] = [];
     walkNode(this, node => {
@@ -545,12 +558,18 @@ export class HTMLElement extends Node {
     return elements;
   }
 
+  /**
+   * including this element
+   * */
   hasElementByTagName(tagName: string): boolean {
     const f = (node: Node) =>
       isTagName(node, tagName) || node.childNodes.some(node => f(node));
     return f(this);
   }
 
+  /**
+   * including this element
+   * */
   hasElementByAnyTagName(tagNames: string[]): boolean {
     const f = (node: Node) =>
       isAnyTagName(node, tagNames) || node.childNodes.some(node => f(node));
@@ -638,6 +657,42 @@ export class HTMLElement extends Node {
     }
     return { res: html, data: node };
   }
+}
+
+/**
+ * including this node
+ * */
+export function getElementByTagName(
+  node: Node,
+  tagName: string,
+): HTMLElement | undefined {
+  if (node instanceof HTMLElement && node.isTagName(tagName)) {
+    return node;
+  }
+  if (node.childNodes) {
+    for (const child of node.childNodes) {
+      const element = getElementByTagName(child, tagName);
+      if (element) {
+        return element;
+      }
+    }
+  }
+}
+
+export function getElementsByTagName(
+  node: Node,
+  tagName: string,
+): HTMLElement[] {
+  if (node instanceof HTMLElement) {
+    return node.getElementsByTagName(tagName);
+  }
+  const nodes: HTMLElement[] = [];
+  if (node.childNodes) {
+    for (const child of node.childNodes) {
+      nodes.push(...getElementsByTagName(child, tagName));
+    }
+  }
+  return nodes;
 }
 
 export class Command extends HTMLElement {
