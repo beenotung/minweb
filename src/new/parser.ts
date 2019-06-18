@@ -1,3 +1,5 @@
+import * as util from 'util';
+
 export let config = {
   dev: false,
   debug: false,
@@ -17,8 +19,6 @@ export abstract class Node {
   abstract outerHTML: string;
   abstract minifiedOuterHTML: string;
   childNodes?: Node[];
-  // TODO use parentNode to distinct auto close and extra closing
-  //  abstract parentNode:Node;
 
   abstract clone(): this;
 }
@@ -26,10 +26,12 @@ export abstract class Node {
 export interface NodeConstructor<T extends Node> {
   name: string;
 
-  new (): T;
+  new(): T;
 
   parse(html: string): ParseResult<T>;
 }
+
+const dev = console.log.bind(console, '[dev]');
 
 export function walkNode(
   node: Node,
@@ -218,7 +220,7 @@ function parseAttrValue(html: string): ParseResult<string> {
   const c = html[0];
   switch (c) {
     case '"':
-    case "'":
+    case '\'':
       return parseString(html, c);
     case '/': {
       let acc = c;
@@ -315,7 +317,7 @@ class Attributes extends Node {
     if (c === value[value.length - 1]) {
       switch (c) {
         case '"':
-        case "'":
+        case '\'':
           return value.substring(1, value.length - 1);
       }
     }
@@ -376,6 +378,7 @@ function noBody(tagName: string) {
  * parse until the body of the element (not recursively)
  * */
 function parseHTMLElementHead(html: string): ParseResult<HTMLElement> {
+  dev('parseHTMLElementHead:', html);
   assert(html[0] === '<', 'expect tag open bracket');
   html = html.substr(1);
   /* tslint:disable:no-use-before-declare */
@@ -391,6 +394,7 @@ function parseHTMLElementHead(html: string): ParseResult<HTMLElement> {
     node.tagName = data;
     html = res;
   }
+  pushStack(node);
   {
     const { res, data } = Attributes.parse(html);
     node.attributes = data;
@@ -406,17 +410,23 @@ function parseHTMLElementHead(html: string): ParseResult<HTMLElement> {
   return { res: html, data: node };
 }
 
+function startsWithCaseInsensitive(content: string, pattern: string): boolean {
+  return content.length >= pattern.length
+    && content.substr(0, pattern.length).toLowerCase() === pattern.toLowerCase();
+}
+
 /**
  * start from end of body, must not be still inside open tag
  * */
 function parseHTMLElementTail(
   html: string,
   node: HTMLElement,
+  tagName: string,
   closeTagHTML: string,
 ): ParseResult<void> {
   assert(html[0] === '<', 'expect tag close bracket');
-  // TODO support edge case of different cases of opening and closing (e.g. <p></P>)
-  if (html.startsWith(closeTagHTML)) {
+  // TODO test if support edge case of different cases of opening and closing (e.g. <p></P>)
+  if (html.startsWith(closeTagHTML) || startsWithCaseInsensitive(html, `</${tagName}>`)) {
     // normal close
     node.notClosed = false;
     html = html.substr(closeTagHTML.length);
@@ -427,6 +437,7 @@ function parseHTMLElementTail(
       console.log('auto repair:', node);
     }
   }
+  popStack(node.tagName);
   return { res: html, data: void 0 };
 }
 
@@ -449,6 +460,7 @@ export class HTMLElement extends Node {
   /* auto repair */
   notClosed = true;
   extraClosing?: boolean;
+  injectedOpening?: boolean;
 
   clone(): this {
     const node = newObject(this);
@@ -466,13 +478,16 @@ export class HTMLElement extends Node {
     if (this.extraClosing) {
       return config.autoRepair ? '' : `</${this.tagName}>`;
     }
-    let html = `<${this.tagName}`;
-    html += this.attributes.outerHTML;
-    if (this.noBody) {
-      html += '/>';
-      return html;
+    let html = '';
+    if (!this.injectedOpening) {
+      html = `<${this.tagName}`;
+      html += this.attributes.outerHTML;
+      if (this.noBody) {
+        html += '/>';
+        return html;
+      }
+      html += '>';
     }
-    html += '>';
     (this.childNodes || []).forEach(node => (html += node.outerHTML));
     if (!noBody(this.tagName) && (config.autoRepair || !this.notClosed)) {
       html += `</${this.tagName}>`;
@@ -550,18 +565,25 @@ export class HTMLElement extends Node {
     return f(this);
   }
 
-  static parse(html: string /* TODO ,parent:Node*/): ParseResult<Node> {
+  static parse(html: string): ParseResult<Node> {
     // const originalHtml = html;
     let node: HTMLElement;
     {
       const { res, data } = parseHTMLElementHead(html);
-      if (data instanceof HTMLElement) {
-        if (data.extraClosing) {
-          // TODO distinct auto closing and extra closing
-        }
-      }
       node = data;
       html = res;
+    }
+    if (node.extraClosing) {
+      popStack(node.tagName);
+      if (!hasParentOnStack(node.tagName)) {
+        // no matching parent
+        return { res: html, data: node };
+      }
+      // has matching parent
+
+      // leave to the parent to handle
+      // dev('has parent:',node.tagName);
+      return { res: html, data: node };
     }
     if (node.tagName.toLowerCase() === 'style') {
       return continueParseStyleFromHTMLElement(html, node);
@@ -573,20 +595,22 @@ export class HTMLElement extends Node {
       return { res: html, data: node };
     }
     node.childNodes = [];
-    for (; html.length > 0; ) {
+    for (; html.length > 0;) {
       const c = html[0];
       if (c === '<') {
         // meet open/close tag
         if (html.startsWith('</')) {
           // close node
           const selfCloseTagHtml = `</${node.tagName}>`;
+          dev('close tag:', html.substr(0, 10));
+          dev('selfCloseTagHtml:', selfCloseTagHtml);
           if (html.startsWith(selfCloseTagHtml)) {
             // normal close
             node.notClosed = false;
             html = html.substr(selfCloseTagHtml.length);
             break;
           } else {
-            // auto repair close
+            // not startsWith selfCloseTagHtml, auto repair closing tag
             const { res, data } = HTMLElement.parse(html);
             if (data instanceof HTMLElement) {
               if (noBody(data.tagName)) {
@@ -595,12 +619,33 @@ export class HTMLElement extends Node {
                 continue;
               }
             }
-            node.notClosed = true;
-            if (config.debug) {
-              console.log('auto repair:', node);
+            dev('!!!!!!!!!!!!! well !!!!!!!!!!!');
+            dev({ data, node });
+            if (data instanceof HTMLElement && data.extraClosing) {
+              if (hasParentOnStack(data.tagName)) {
+                // has matching parent
+                dev('has matching parent');
+                node.notClosed = true;
+                const clonedNode = node.clone();
+                clonedNode.childNodes = [];
+                clonedNode.injectedOpening = true;
+                const parentIdx = getParentIdxOnStack(data.tagName);
+                // parseStack.splice(parentIdx - 1, 0, clonedNode);
+                const parent = parseStack[parentIdx - 1];
+                const injectedHtml = `<${node.tagName}>` + res;
+                {
+                  const { res, data } = parse(Document, injectedHtml);
+                  clonedNode.childNodes = data.childNodes;
+                  dev('new:', util.inspect({ res, clonedNode, parent }, { depth: 99 }));
+                  parent.childNodes.push(clonedNode);
+                  html = res;
+                }
+                break;
+              }
+              // no matching parent
+              node.childNodes.push(data);
+              html = res;
             }
-
-            break;
           }
         } else {
           // open node
@@ -617,6 +662,8 @@ export class HTMLElement extends Node {
         html = res;
       }
     }
+    dev('finished parsing:', node);
+    popStack(node.tagName);
     return { res: html, data: node };
   }
 }
@@ -756,7 +803,6 @@ abstract class DSLElement extends HTMLElement {
 
   clone(): this {
     const node = newObject(this);
-    console.log('clone DSL', this);
     node.textContent = this.textContent;
     node.childNodes = node.childNodes
       ? this.childNodes.slice()
@@ -809,7 +855,7 @@ class Style extends DSLElement {
           break;
         }
         case '"':
-        case "'": {
+        case '\'': {
           const { res, data } = parseString(html.substr(i), c);
           acc += data;
           return { res };
@@ -844,7 +890,7 @@ function continueParseStyleFromHTMLElement(
     html = res;
   }
   {
-    const { res } = parseHTMLElementTail(html, style, closeTagHTML);
+    const { res } = parseHTMLElementTail(html, style, node.tagName, closeTagHTML);
     html = res;
   }
   return { res: html, data: style };
@@ -875,7 +921,7 @@ class Script extends DSLElement {
           break;
         }
         case '"':
-        case "'": {
+        case '\'': {
           const { res, data } = parseString(html, c);
           acc += data;
           return { res };
@@ -926,7 +972,7 @@ function parseScriptBody(
   const { res } = forChar(html, (c, i, html) => {
     switch (c) {
       case '"':
-      case "'": {
+      case '\'': {
         const { res, data } = parseString(html.substr(i), c);
         acc += data;
         return { res };
@@ -1007,7 +1053,7 @@ function continueParseScriptFromHTMLElement(
     html = res;
   }
   {
-    const { res } = parseHTMLElementTail(html, script, closeTagHTML);
+    const { res } = parseHTMLElementTail(html, script, node.tagName, closeTagHTML);
     html = res;
   }
   return { res: html, data: script };
@@ -1050,6 +1096,49 @@ export class Document extends Node {
 }
 
 let parseLevel = 0;
+const parseStack: Node[] = [];
+
+function hasParentOnStack(tagName: string): boolean {
+  tagName = tagName.toLowerCase();
+  return parseStack.findIndex(node => node instanceof HTMLElement && node.isTagName(tagName)) !== -1;
+}
+
+function getParentIdxOnStack(tagName: string): number {
+  for (let i = parseStack.length - 1; i >= 0; i--) {
+    const node = parseStack[i];
+    if (node instanceof HTMLElement && node.isTagName(tagName)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function formatStackElement(node: Node): string {
+  return node instanceof HTMLElement ? node.tagName : node.constructor.name;
+}
+
+function logStack(title: string) {
+  dev(title, parseStack.map(node => formatStackElement(node)));
+}
+
+function pushStack(node: HTMLElement) {
+  logStack('stack:');
+  dev('push to stack:', node.tagName);
+  parseStack.push(node);
+}
+
+function popStack(tagName: string) {
+  assert(parseStack.length > 0, new Error('expect to pop stack, but it\'s empty'));
+  logStack('stack:');
+  const top = parseStack.pop();
+  dev('pop from stack:', formatStackElement(top));
+  logStack('new stack:');
+  if (top instanceof HTMLElement) {
+    assert(top.isTagName(tagName), new Error(`expect to pop ${tagName} from stack, but got ${top.tagName}`));
+  } else {
+    throw new Error(`expect top of stack to be ${tagName}, but got ${formatStackElement(top)}`);
+  }
+}
 
 function parse<T extends Node>(
   context: NodeConstructor<T>,
@@ -1090,8 +1179,13 @@ export function parseHtmlDocument(html: string, skipTrim = false): Document {
     // to escape 5 leading 0xFEFF
     html = html.trimLeft();
   }
+  if (parseStack.length !== 0) {
+    console.error({ parseStack });
+    throw new Error('parseStack is not cleared before parsing');
+  }
   const root = new Document();
-  for (; html.length > 0; ) {
+  parseStack.push(root);
+  for (; html.length > 0;) {
     const c = html[0];
     const p = (context: NodeConstructor<any>) => {
       const { res, data } = parse(context, html);
@@ -1106,8 +1200,36 @@ export function parseHtmlDocument(html: string, skipTrim = false): Document {
         p(Text);
     }
   }
+
+  // fix auto repair injected opening tag order
+  const f = (node: Node) => {
+    if (!node.childNodes) {
+      return;
+    }
+    for (let i = 1; i < node.childNodes.length; i++) {
+      const prev = node.childNodes[i - 1];
+      const curr = node.childNodes[i];
+      if (prev instanceof HTMLElement && curr instanceof HTMLElement) {
+        if (prev.injectedOpening && curr.notClosed) {
+          curr.notClosed = false;
+          node.childNodes[i - 1] = curr;
+          node.childNodes[i] = prev;
+        }
+      }
+    }
+    node.childNodes.forEach(node => f(node));
+  };
+  f(root);
+
   if (html.length !== 0) {
     console.error('not fully parsed html string');
+  }
+  if (parseStack.length as any === 1 && parseStack[0] === root) {
+    parseStack.pop();
+  }
+  if (parseStack.length !== 0) {
+    console.error({ parseStack });
+    throw new Error('parseStack is not cleared after parsing');
   }
   return root;
 }
