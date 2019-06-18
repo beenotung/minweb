@@ -737,6 +737,7 @@ export class Command extends HTMLElement {
 }
 
 export class Comment extends Command {
+  tagName = '';
   content: string;
 
   clone(): this {

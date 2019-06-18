@@ -255,6 +255,42 @@ function addAttributes(target: Attribute[], newAttrs: Attribute[]) {
   }
 }
 
+export function genFixUrl(url: string) {
+  const protocol = url_to_protocol(url);
+  const host = url_to_host(url);
+  const base = url_to_base(url);
+  const fixUrl = (url: string) => {
+    let wrapper = '';
+    if (url.startsWith('"') && url.endsWith('"')) {
+      wrapper = '"';
+    } else if (url.startsWith("'") && url.endsWith("'")) {
+      wrapper = "'";
+    }
+    if (wrapper) {
+      url = url.substring(1, url.length - 1);
+    }
+    url =
+      url[0] == '/'
+        ? protocol + '://' + host + url
+        : url.startsWith('http://') || url.startsWith('https://')
+        ? url
+        : base + url;
+    if (wrapper) {
+      url = wrapper + url + wrapper;
+    }
+    return url;
+  };
+  return fixUrl;
+}
+
+export function genAddPrefix(hrefPrefix: string) {
+  const addPrefix = (s: string) =>
+    s[0] == '"' || s[0] == "'"
+      ? s.replace(s[0], s[0] + hrefPrefix)
+      : hrefPrefix + s;
+  return addPrefix;
+}
+
 export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
   if (!s) {
     return '';
@@ -305,36 +341,11 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
   topLevel = filter_skip_tag_attr(topLevel, skipTags, skipAttrs, skipAttrFs);
 
   const hrefPrefix = options && options.hrefPrefix ? options.hrefPrefix : '';
-  const addPrefix = (s: string) =>
-    s[0] == '"' || s[0] == "'"
-      ? s.replace(s[0], s[0] + hrefPrefix)
-      : hrefPrefix + s;
+  const addPrefix = genAddPrefix(options.hrefPrefix);
+
   const url: string = options && options.url ? options.url : '';
   if (url) {
-    const protocol = url_to_protocol(url);
-    const host = url_to_host(url);
-    const base = url_to_base(url);
-    const fixUrl = (url: string) => {
-      let wrapper = '';
-      if (url.startsWith('"') && url.endsWith('"')) {
-        wrapper = '"';
-      } else if (url.startsWith("'") && url.endsWith("'")) {
-        wrapper = "'";
-      }
-      if (wrapper) {
-        url = url.substring(1, url.length - 1);
-      }
-      url =
-        url[0] == '/'
-          ? protocol + '://' + host + url
-          : url.startsWith('http://') || url.startsWith('https://')
-          ? url
-          : base + url;
-      if (wrapper) {
-        url = wrapper + url + wrapper;
-      }
-      return url;
-    };
+    const fixUrl = genFixUrl(url);
     /* apply url fix */
     topLevel.forEach(item =>
       scanner_update_tag(item, tag => {

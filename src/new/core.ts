@@ -1,15 +1,23 @@
 import {
   defaultSkipTags,
+  genAddPrefix,
+  genFixUrl,
   MinifyHTMLOptions,
   Tag_Article,
   Tag_IFrame,
   tag_whitelist,
   textonly_tag_blackList,
 } from '../core';
+import { opt_out_line, opt_out_link } from '../opt-out';
+import { ThemeStyles } from '../theme';
 import {
+  Attr,
+  Attributes,
   Command,
   Comment,
   Document,
+  getElementByTagName,
+  getElementsByTagName,
   HTMLElement,
   isAnyTagName,
   Node,
@@ -33,6 +41,65 @@ const mergeText = (node: Node) => {
   }
 };
 
+function findOrInjectAttr(attrs: Attributes, name: string): Attr {
+  name = name.toLowerCase();
+  for (const attr of attrs.attrs) {
+    if (typeof attr === 'object' && attr.name.toLowerCase() === name) {
+      return attr;
+    }
+  }
+  const attr: Attr = {
+    name,
+  };
+  attrs.attrs.push(attr);
+  return attr;
+}
+
+/* tslint:disable:no-unused-variable */
+const dev = console.log.bind(console, '[core]');
+/* tslint:enable:no-unused-variable */
+
+function findOrInjectElement(
+  node: Node,
+  tagName: string,
+  options?: {
+    injectIntoTagName?: string;
+    mode?: 'push' | 'unshift';
+  },
+): HTMLElement {
+  let element = getElementByTagName(node, tagName);
+  if (!element) {
+    element = new HTMLElement();
+    element.tagName = tagName;
+    element.attributes = new Attributes();
+    element.notClosed = false;
+    (element as any).injected = true;
+    const target =
+      options && options.injectIntoTagName
+        ? findOrInjectElement(node, options.injectIntoTagName)
+        : node;
+    if (!target.childNodes) {
+      target.childNodes = [];
+    }
+    const mode = options && options.mode ? options.mode : 'push';
+    switch (mode) {
+      case 'push':
+        target.childNodes.push(element);
+        break;
+      case 'unshift':
+        target.childNodes.unshift(element);
+        break;
+    }
+  }
+  return element;
+}
+
+function text(text: string): Text {
+  const node = new Text();
+  node.outerHTML = text;
+  return node;
+}
+
 export function minifyDocument(
   document: Document,
   options: MinifyHTMLOptions,
@@ -41,6 +108,13 @@ export function minifyDocument(
     document = document.clone();
   }
   // walkNode(document, node => node.childNodes = node.childNodes || []);
+  const html = findOrInjectElement(document, 'html');
+  const head = findOrInjectElement(document, 'head', {
+    injectIntoTagName: 'html',
+  });
+  const body = findOrInjectElement(document, 'body', {
+    injectIntoTagName: 'html',
+  });
 
   let keepTags: string[] = tag_whitelist.slice();
   const skipTags: string[] = options.skipTags || defaultSkipTags;
@@ -56,6 +130,11 @@ export function minifyDocument(
     }
   }
   const skipIFrame = skipTags.includes(Tag_IFrame);
+
+  const hrefPrefix = options.hrefPrefix || '';
+  const addPrefix = genAddPrefix(options.hrefPrefix);
+  const url = options.url || '';
+  const fixUrl = url ? genFixUrl(url) : undefined;
 
   walkNode(document, node => {
     node.childNodes = (node.childNodes || []).filter(node => {
@@ -130,6 +209,57 @@ export function minifyDocument(
         }
       }
 
+      // fix url
+      if (url && element) {
+        const name = element.tagName.toLowerCase();
+        const updateValue = (name: string, f: (value: string) => string) =>
+          element.attributes.forEachAttr(attr => {
+            if (attr.name.toLowerCase() === name && attr.value) {
+              attr.value = f(attr.value);
+            }
+          });
+        switch (name) {
+          case 'a':
+            updateValue('href', value => addPrefix(fixUrl(value)));
+            break;
+          case 'link':
+            updateValue('href', value => fixUrl(value));
+            break;
+          case 'img':
+            updateValue('src', value => fixUrl(value));
+            break;
+          case 'base':
+            // breaking image links on some sites
+            if ('') {
+              updateValue('href', value => hrefPrefix);
+            }
+            break;
+          case 'form':
+            // doesn't work
+            if ('') {
+              console.error('checking form');
+              updateValue('method', method => {
+                switch (method.toLowerCase()) {
+                  case 'get':
+                  case '"get"':
+                  case "'get'":
+                    updateValue('action', value => {
+                      const newValue = addPrefix(fixUrl(value));
+                      console.error('added prefix: ' + newValue);
+                      return newValue;
+                    });
+                }
+                return method;
+              });
+            }
+            break;
+        }
+      }
+
+      if (options.textDecorator && node instanceof Text) {
+        node.outerHTML = options.textDecorator(node.outerHTML);
+      }
+
       return true;
     });
   });
@@ -154,6 +284,63 @@ export function minifyDocument(
 
   // merge text elements, this is possible because original elements in the middle may be removed
   mergeText(document);
+
+  // inject opt-out link
+  // inject theme style
+  if (body.childNodes.length === 0) {
+    body.childNodes.push(text(opt_out_link));
+  } else {
+    body.childNodes = [
+      text(opt_out_link),
+      text(opt_out_line),
+      text(ThemeStyles.get(options.theme || 'default')),
+      ...body.childNodes,
+      text(opt_out_line),
+      text(opt_out_link),
+    ];
+  }
+
+  if (options.inject_style) {
+    const mobileDocument = parseHtmlDocument(
+      `<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="msapplication-tap-highlight" content="no">
+</head>
+<body>
+</body>
+</html>`.replace(/\n/g, ''),
+    );
+
+    {
+      const first = document.childNodes[0];
+      if (first.outerHTML.toUpperCase().trim() !== '<!DOCTYPE HTML>') {
+        document.childNodes.unshift(text('<!DOCTYPE html>'));
+      }
+    }
+
+    const lang = findOrInjectAttr(html.attributes, 'lang');
+    lang.value = lang.value || '"en"';
+    const dir = findOrInjectAttr(html.attributes, 'dir');
+    dir.value = dir.value || '"ltr"';
+
+    const metaList = getElementsByTagName(mobileDocument, 'meta');
+    head.childNodes = [...metaList, ...(head.childNodes || [])];
+
+    body.childNodes = [
+      text(
+        '<link rel="stylesheet" href="https://unpkg.com/normalize.css@8.0.1/normalize.css" type="text/css">',
+      ),
+      text(
+        '<link rel="stylesheet" href="https://unpkg.com/@beenotung/sakura.css/css/sakura.css" type="text/css">',
+      ),
+      ...(body.childNodes || []),
+    ];
+  }
 
   return document;
 }

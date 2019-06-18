@@ -3,7 +3,7 @@ import * as util from 'util';
 import { MinifyHTMLOptions } from '../src/core';
 import { minifyDocument } from '../src/new/core';
 import { parseHtmlDocument, wrapNode } from '../src/new/parser';
-import { saveFile, testFile, testUrl } from './utils';
+import { saveFile, testUrl } from './utils';
 
 const fetch = require('node-fetch');
 
@@ -29,7 +29,7 @@ const options: MinifyHTMLOptions = {
   // theme: 'console',
   skipTags: [
     'script',
-    // 'style',
+    'style',
     // 'link',
     'iframe',
   ],
@@ -37,6 +37,7 @@ const options: MinifyHTMLOptions = {
   hrefPrefix: 'https://minweb.surge.sh?url=',
   // article_mode: true,
   text_mode: true,
+  inject_style: true,
 };
 
 function test(html: string, filename: string): Promise<any> {
