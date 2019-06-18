@@ -1,7 +1,7 @@
 import { unescape } from 'querystring';
-import { saveFile } from './utils';
 import { minifyHTML, MinifyHTMLOptions } from '../src/core';
 import { parseHtmlDocument, wrapNode } from '../src/new/parser';
+import { saveFile } from './utils';
 
 const fetch = require('node-fetch');
 
@@ -20,7 +20,7 @@ url = 'https://hk.news.yahoo.com/%E8%B2%AA%E7%8E%A9%E7%94%9F%E5%90%9E%E9%BC%BB%E
 url = 'http://yahoo.hk';
 url = 'https://www.jessicahk.com/articles/qing-gan-ce-shi-kan-ni-shi-fou-hao-se-nu';
 
-let options: MinifyHTMLOptions = {
+const options: MinifyHTMLOptions = {
   // textDecorator: debugTextDecorator
   theme: 'dark'
   // theme: 'light'
@@ -30,7 +30,7 @@ let options: MinifyHTMLOptions = {
     , 'style'
     , 'link',
   ]
-  , url: url
+  , url
   , hrefPrefix: 'https://minweb.surge.sh?url=',
   // , article_mode: true
   // , text_mode: true
@@ -38,14 +38,14 @@ let options: MinifyHTMLOptions = {
 fetch(url)
   .then(res => res.text())
   .then(html => {
-    let ps = [];
+    const ps = [];
 
     ps.push(saveFile('in.html', html));
 
-    let document = parseHtmlDocument(html);
+    const document = parseHtmlDocument(html);
     ps.push(saveFile('wrapped-root.html', JSON.stringify(wrapNode(document), null, 2)));
 
-    let minifiedHtml = minifyHTML(html, options);
+    const minifiedHtml = minifyHTML(html, options);
     ps.push(saveFile('out.html', minifiedHtml));
 
     return Promise.all(ps);

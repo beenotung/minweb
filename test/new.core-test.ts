@@ -1,9 +1,9 @@
 import { unescape } from 'querystring';
 import * as util from 'util';
-import { saveFile, testFile, testUrl } from './utils';
 import { MinifyHTMLOptions } from '../src/core';
 import { minifyDocument } from '../src/new/core';
 import { parseHtmlDocument, wrapNode } from '../src/new/parser';
+import { saveFile, testFile, testUrl } from './utils';
 
 const fetch = require('node-fetch');
 
@@ -22,7 +22,7 @@ url = 'https://hk.news.yahoo.com/%E8%B2%AA%E7%8E%A9%E7%94%9F%E5%90%9E%E9%BC%BB%E
 url = 'http://yahoo.hk';
 url = 'https://www.jessicahk.com/articles/qing-gan-ce-shi-kan-ni-shi-fou-hao-se-nu';
 
-let options: MinifyHTMLOptions = {
+const options: MinifyHTMLOptions = {
   // textDecorator: debugTextDecorator,
   // theme: 'dark',
   // theme: 'light',
@@ -33,23 +33,23 @@ let options: MinifyHTMLOptions = {
     // 'link',
     'iframe',
   ],
-  url: url,
+  url,
   hrefPrefix: 'https://minweb.surge.sh?url=',
   // article_mode: true,
   text_mode: true,
 };
 
 function test(html: string, filename: string): Promise<any> {
-  let ps = [];
+  const ps = [];
 
   ps.push(saveFile('in.html', html));
 
-  let document = parseHtmlDocument(html);
+  const document = parseHtmlDocument(html);
   ps.push(saveFile('in-root.json', JSON.stringify(wrapNode(document), null, 2)));
   ps.push(saveFile('in-root.txt', util.inspect(document, { depth: 999 })));
 
   minifyDocument.skipClone = false;
-  let minifiedDocument = minifyDocument(document, options);
+  const minifiedDocument = minifyDocument(document, options);
   ps.push(saveFile('out-root.json', JSON.stringify(wrapNode(minifiedDocument), null, 2)));
   ps.push(saveFile('out-root.txt', util.inspect(minifiedDocument, { depth: 999 })));
 
@@ -60,4 +60,3 @@ function test(html: string, filename: string): Promise<any> {
 
 testUrl(test, url);
 // testFile(test, 'demo/input.html');
-
