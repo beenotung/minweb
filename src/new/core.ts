@@ -18,6 +18,8 @@ import {
   Document,
   getElementByTagName,
   getElementsByTagName,
+  hasElementByAnyTagName,
+  hasElementByTagName,
   HTMLElement,
   isAnyTagName,
   Node,
@@ -165,10 +167,8 @@ export function minifyDocument(
       if (options.article_mode && element) {
         if (
           !(
-            element.isTagName(Tag_Article) ||
-            element.isAnyTagName(tag_whitelist) ||
-            element.hasElementByTagName(Tag_Article) ||
-            element.hasElementByAnyTagName(tag_whitelist)
+            hasElementByTagName(node, Tag_Article) ||
+            hasElementByAnyTagName(node, tag_whitelist)
           )
         ) {
           return false;
