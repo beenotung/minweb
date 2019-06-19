@@ -29,7 +29,7 @@ To read a webpage without over-bloated fancy stuff.
 |===
 | Filename | Desc
 
-| src/new/core.ts | the core logic
+| src/core.ts     | the core logic
 | pack            | build webtask version and copy into clipboard
 | webtask.js      | webtask version
 | tampermonkey.js | tampermonkey version

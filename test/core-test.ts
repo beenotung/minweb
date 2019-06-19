@@ -1,7 +1,9 @@
 import { unescape } from 'querystring';
-import { minifyHTML, MinifyHTMLOptions } from '../src/core';
-import { parseHtmlDocument, wrapNode } from '../src/new/parser';
-import { saveFile } from './utils';
+import * as util from 'util';
+import { MinifyHTMLOptions } from '../src/helpers';
+import { minifyDocument } from '../src/core';
+import { parseHtmlDocument, wrapNode } from '../src/parser';
+import { saveFile, testUrl } from './utils';
 
 const fetch = require('node-fetch');
 
@@ -21,32 +23,41 @@ url = 'http://yahoo.hk';
 url = 'https://www.jessicahk.com/articles/qing-gan-ce-shi-kan-ni-shi-fou-hao-se-nu';
 
 const options: MinifyHTMLOptions = {
-  // textDecorator: debugTextDecorator
-  theme: 'dark'
-  // theme: 'light'
-  // theme: 'console'
-  , skipTags: [
-    'script'
-    , 'style'
-    , 'link',
-  ]
-  , url
-  , hrefPrefix: 'https://minweb.surge.sh?url=',
-  // , article_mode: true
-  // , text_mode: true
+  // textDecorator: debugTextDecorator,
+  // theme: 'dark',
+  // theme: 'light',
+  // theme: 'console',
+  skipTags: [
+    'script',
+    'style',
+    // 'link',
+    'iframe',
+  ],
+  url,
+  hrefPrefix: 'https://minweb.surge.sh?url=',
+  // article_mode: true,
+  text_mode: true,
+  inject_style: true,
 };
-fetch(url)
-  .then(res => res.text())
-  .then(html => {
-    const ps = [];
 
-    ps.push(saveFile('in.html', html));
+function test(html: string, filename: string): Promise<any> {
+  const ps = [];
 
-    const document = parseHtmlDocument(html);
-    ps.push(saveFile('wrapped-root.html', JSON.stringify(wrapNode(document), null, 2)));
+  ps.push(saveFile('in.html', html));
 
-    const minifiedHtml = minifyHTML(html, options);
-    ps.push(saveFile('out.html', minifiedHtml));
+  const document = parseHtmlDocument(html);
+  ps.push(saveFile('in-root.json', JSON.stringify(wrapNode(document), null, 2)));
+  ps.push(saveFile('in-root.txt', util.inspect(document, { depth: 999 })));
 
-    return Promise.all(ps);
-  });
+  minifyDocument.skipClone = false;
+  const minifiedDocument = minifyDocument(document, options);
+  ps.push(saveFile('out-root.json', JSON.stringify(wrapNode(minifiedDocument), null, 2)));
+  ps.push(saveFile('out-root.txt', util.inspect(minifiedDocument, { depth: 999 })));
+
+  ps.push(saveFile('out.html', minifiedDocument.minifiedOuterHTML));
+
+  return Promise.all(ps);
+}
+
+testUrl(test, url);
+// testFile(test, 'demo/input.html');
