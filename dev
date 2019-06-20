@@ -1,5 +1,5 @@
 #!/bin/bash
 set -e
 set -o pipefail
-ts-node test/new.parser-test.ts 2>&1 | tee log.html
-ts-node test/new.core-test.ts 2>&1 | tee log.html
+ts-node test/parser-test.ts 2>&1 | tee log.html
+ts-node test/core-test.ts 2>&1 | tee log.html

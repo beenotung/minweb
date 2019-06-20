@@ -1,7 +1,7 @@
 // import * as fetch from "isomorphic-fetch"
 // let fetch = require("isomorphic-fetch").fetch;
 import { MinifyHTMLOptions } from './core';
-import { minifyHTML } from './new/core';
+import { minifyHTML } from './core';
 
 const fetch = require('node-fetch');
 

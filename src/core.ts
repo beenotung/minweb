@@ -1,431 +1,308 @@
+import {
+  defaultSkipTags,
+  genAddPrefix,
+  genFixUrl,
+  MinifyHTMLOptions,
+  Tag_Article,
+  Tag_IFrame,
+  tag_whitelist,
+  textonly_tag_blackList,
+} from './helpers';
 import { opt_out_line, opt_out_link } from './opt-out';
 import {
-  Attribute,
-  HTMLItem,
-  htmlItem_to_string_no_comment,
-  parseHTMLTree,
-  Tag,
+  Attr,
+  Attributes,
+  Command,
+  Comment,
+  Document,
+  getElementByTagName,
+  getElementsByTagName,
+  hasElementByAnyTagName,
+  hasElementByTagName,
+  HTMLElement,
+  isAnyTagName,
+  Node,
+  parseHtmlDocument,
+  Text,
+  walkNode,
+  walkNodeReversed,
 } from './parser';
-import { TextDecorator, Theme, ThemeStyles } from './theme';
+import { ThemeStyles } from './theme';
 
-/**
- * @return <boolean> has or is text
- * */
-const item_has_text = (item: HTMLItem): boolean =>
-  !!item.text || item.children.some(item_has_text);
-
-const item_has_tag = (item: HTMLItem, name: string): boolean =>
-  (item.tag && item.tag.name.toLowerCase() == name.toLowerCase()) ||
-  item.children.some(item => item_has_tag(item, name));
-
-const item_is_command = (item: HTMLItem, name: string): boolean =>
-  item.command && item.command.name.toLowerCase() == name.toLowerCase();
-
-const item_is_tag = (item: HTMLItem, name: string): boolean =>
-  item.tag && item.tag.name.toLowerCase() == name.toLowerCase();
-
-const item_is_any_tag = (item: HTMLItem, names: string[]): boolean =>
-  item.tag && names.indexOf(item.tag.name.toLowerCase()) !== -1;
-
-/* for textonly and article */
-export const tag_whitelist = ['head', 'style', 'link', 'meta'];
-export const textonly_tag_blackList = [
-  'script',
-  'button',
-  'img',
-  'video',
-  'svg',
-  'nav',
-];
-
-function filter_textonly(topLevel: HTMLItem[]): HTMLItem[] {
-  const res: HTMLItem[] = [];
-  topLevel.forEach(item => {
-    if (item_is_any_tag(item, textonly_tag_blackList)) {
-      return;
+const mergeText = (node: Node) => {
+  if (node.childNodes) {
+    for (let i = node.childNodes.length - 1; i > 0; i--) {
+      const c = node.childNodes[i];
+      const prev = node.childNodes[i - 1];
+      if (c instanceof Text && prev instanceof Text) {
+        prev.outerHTML += c.outerHTML;
+        node.childNodes.splice(i, 1);
+      }
     }
-    if (item.command || item.text || item_is_any_tag(item, tag_whitelist)) {
-      return res.push(item);
-    }
-    if (item_has_text(item)) {
-      res.push(item);
-      item.children = filter_textonly(item.children);
-    }
-  });
-  return res;
-}
+    node.childNodes.forEach(node => mergeText(node));
+  }
+};
 
-export const Tag_Article = 'article';
-export const Tag_IFrame = 'iframe';
-
-function filter_article(topLevel: HTMLItem[]): HTMLItem[] {
-  const res: HTMLItem[] = [];
-  topLevel.forEach(item => {
-    if (
-      item_is_tag(item, Tag_Article) ||
-      item_is_any_tag(item, tag_whitelist)
-    ) {
-      return res.push(item);
-    }
-    if (
-      item_has_tag(item, Tag_Article) ||
-      tag_whitelist.some(t => item_has_tag(item, t))
-    ) {
-      res.push(item);
-      item.children = filter_article(item.children);
-    }
-  });
-  return res;
-}
-
-function filter_skip_comment(topLevel: HTMLItem[]): HTMLItem[] {
-  const res: HTMLItem[] = [];
-  topLevel.forEach(item => {
-    if (item.comment) {
-      return;
-    }
-    res.push(item);
-    item.children = filter_skip_comment(item.children);
-  });
-  return res;
-}
-
-/**
- * @param {Array<HTMLItem>} topLevel
- * @param {Array<String>} skipTags
- * @param {Array<String>} skipAttrs
- * @param {Array<Function>} skipAttrFs return false if this element should be removed
- * */
-function filter_skip_tag_attr(
-  topLevel: HTMLItem[],
-  skipTags: string[],
-  skipAttrs: string[],
-  skipAttrFs: Array<(name: string, value: string) => boolean>,
-): HTMLItem[] {
-  const res: HTMLItem[] = [];
-  topLevel.forEach(item => {
-    if (item_is_any_tag(item, skipTags)) {
-      return;
-    }
-    res.push(item);
-    if (item.tag) {
-      item.tag.attributes = item.tag.attributes.filter(
-        a =>
-          skipAttrs.indexOf(a.name.toLowerCase()) === -1 &&
-          skipAttrFs.every(f => f(a.name, a.value)),
-      );
-    }
-    item.children = filter_skip_tag_attr(
-      item.children,
-      skipTags,
-      skipAttrs,
-      skipAttrFs,
-    );
-  });
-  return res;
-}
-
-function find_tag(topLevel: HTMLItem[], tagName: string): HTMLItem[] {
-  const res: HTMLItem[] = [];
-  topLevel.forEach(item => {
-    if (item_is_tag(item, tagName)) {
-      return res.push(item);
-    }
-    res.push(...find_tag(item.children, tagName));
-  });
-  return res;
-}
-
-function find_or_inject_tag(
-  topLevel: HTMLItem[],
-  tagName: string,
-  f: (item: HTMLItem) => void,
-  mode: 'push' | 'unshift' = 'push',
-): void {
-  let matched = find_tag(topLevel, tagName);
-  if (matched.length === 0) {
-    const item: HTMLItem = {
-      tag: {
-        name: tagName,
-        attributes: [],
-        noBody: true,
-      },
-      children: [],
-    };
-    matched = [item];
-    if (mode === 'push') {
-      topLevel.push(item);
-    } else if (mode === 'unshift') {
-      topLevel.unshift(item);
+function findOrInjectAttr(attrs: Attributes, name: string): Attr {
+  name = name.toLowerCase();
+  for (const attr of attrs.attrs) {
+    if (typeof attr === 'object' && attr.name.toLowerCase() === name) {
+      return attr;
     }
   }
-  matched.forEach(f);
+  const attr: Attr = {
+    name,
+  };
+  attrs.attrs.push(attr);
+  return attr;
 }
 
 /* tslint:disable:no-unused-variable */
-function scanner_add_to_body(
-  item: HTMLItem,
-  preChildren: HTMLItem[],
-  postChildren: HTMLItem[],
-) {
-  if (item_is_tag(item, 'body')) {
-    item.tag.noBody = false;
-    item.children = [...preChildren, ...item.children, ...postChildren];
-    return;
-  }
-  item.children.forEach(item =>
-    scanner_add_to_body(item, preChildren, postChildren),
-  );
-}
-
+const dev = console.log.bind(console, '[core]');
 /* tslint:enable:no-unused-variable */
 
-function scanner_map_text(item: HTMLItem, f: (s: string) => string) {
-  if (item.text) {
-    item.text = f(item.text);
-  }
-  item.children.forEach(item => scanner_map_text(item, f));
-}
-
-function scanner_update_tag(
-  item: HTMLItem,
-  f: (tag: Tag, item: HTMLItem) => void,
-) {
-  if (item.tag) {
-    f(item.tag, item);
-  }
-  item.children.forEach(item => scanner_update_tag(item, f));
-}
-
-function url_to_protocol(s: string): string {
-  return s.split('://')[0];
-}
-
-function url_to_host(s: string): string {
-  const ss = s.split('://');
-  ss.shift();
-  s = ss.join('://');
-  return s.split('/')[0];
-}
-
-function url_to_base(s: string): string {
-  if (s.endsWith(url_to_host(s))) {
-    return s + '/';
-  }
-  const ss = s.split('/');
-  ss.pop();
-  return ss.join('/') + '/';
-}
-
-export interface MinifyHTMLOptions {
-  textDecorator?: TextDecorator;
-  theme?: Theme;
-  skipTags?: string[];
-  url?: string;
-  hrefPrefix?: string;
-  article_mode?: boolean;
-  text_mode?: boolean;
-  inject_style?: boolean;
-}
-
-export const defaultSkipTags: string[] = [
-  'script',
-  // , 'style'
-  // , 'link'
-  'img',
-  'svg',
-];
-
-/**
- * append or overwrite
- * */
-function addAttributes(target: Attribute[], newAttrs: Attribute[]) {
-  for (const newAttr of newAttrs) {
-    const name = newAttr.name.toLowerCase();
-    let found = false;
-    target.forEach(x => {
-      if (x.name.toLowerCase() === name) {
-        found = true;
-        x.value = newAttr.value;
-      }
-    });
-    if (!found) {
-      target.push(newAttr);
+function findOrInjectElement(
+  node: Node,
+  tagName: string,
+  options?: {
+    injectIntoTagName?: string;
+    mode?: 'push' | 'unshift';
+  },
+): HTMLElement {
+  let element = getElementByTagName(node, tagName);
+  if (!element) {
+    element = new HTMLElement();
+    element.tagName = tagName;
+    element.attributes = new Attributes();
+    element.notClosed = false;
+    (element as any).injected = true;
+    const target =
+      options && options.injectIntoTagName
+        ? findOrInjectElement(node, options.injectIntoTagName)
+        : node;
+    if (!target.childNodes) {
+      target.childNodes = [];
+    }
+    const mode = options && options.mode ? options.mode : 'push';
+    switch (mode) {
+      case 'push':
+        target.childNodes.push(element);
+        break;
+      case 'unshift':
+        target.childNodes.unshift(element);
+        break;
     }
   }
+  return element;
 }
 
-export function genFixUrl(url: string) {
-  const protocol = url_to_protocol(url);
-  const host = url_to_host(url);
-  const base = url_to_base(url);
-  const fixUrl = (url: string) => {
-    let wrapper = '';
-    if (url.startsWith('"') && url.endsWith('"')) {
-      wrapper = '"';
-    } else if (url.startsWith("'") && url.endsWith("'")) {
-      wrapper = "'";
-    }
-    if (wrapper) {
-      url = url.substring(1, url.length - 1);
-    }
-    url =
-      url[0] == '/'
-        ? protocol + '://' + host + url
-        : url.startsWith('http://') || url.startsWith('https://')
-        ? url
-        : base + url;
-    if (wrapper) {
-      url = wrapper + url + wrapper;
-    }
-    return url;
-  };
-  return fixUrl;
+function text(text: string): Text {
+  const node = new Text();
+  node.outerHTML = text;
+  return node;
 }
 
-export function genAddPrefix(hrefPrefix: string) {
-  const addPrefix = (s: string) =>
-    s[0] == '"' || s[0] == "'"
-      ? s.replace(s[0], s[0] + hrefPrefix)
-      : hrefPrefix + s;
-  return addPrefix;
-}
+export function minifyDocument(
+  document: Document,
+  options: MinifyHTMLOptions,
+): Document {
+  if (!minifyDocument.skipClone) {
+    document = document.clone();
+  }
+  // walkNode(document, node => node.childNodes = node.childNodes || []);
+  const html = findOrInjectElement(document, 'html');
+  const head = findOrInjectElement(document, 'head', {
+    injectIntoTagName: 'html',
+  });
+  const body = findOrInjectElement(document, 'body', {
+    injectIntoTagName: 'html',
+  });
 
-export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
-  if (!s) {
-    return '';
-  }
-  let topLevel = parseHTMLTree(s);
-  topLevel = filter_skip_comment(topLevel);
-  if (options && options.article_mode) {
-    topLevel = filter_article(topLevel);
-  }
-  if (options && options.text_mode) {
-    topLevel = filter_textonly(topLevel);
-  }
-  // const res = [];
-  const skipTags: string[] =
-    options && options.skipTags ? options.skipTags : defaultSkipTags;
+  let keepTags: string[] = tag_whitelist.slice();
+  const skipTags: string[] = options.skipTags || defaultSkipTags;
   const skipAttrs: string[] = [];
-  const skipAttrFs: Array<(name: string, value: string) => boolean> = [];
-
-  if (skipTags.indexOf('style') !== -1) {
+  const skipAttrFs: Array<(name: string, value?: string) => boolean> = [];
+  if (skipTags.includes('style')) {
     skipTags.push('link');
     skipAttrs.push('style');
-    if (skipTags.indexOf('script') !== -1) {
-      /* plain static page */
+    keepTags = keepTags.filter(tag => tag !== 'style' && tag !== 'link');
+    if (skipTags.includes('script')) {
       skipAttrs.push('class', 'id');
-      skipAttrFs.push((name, value) => !name.startsWith('data-'));
+      skipAttrFs.push((name: string) => name.startsWith('data-'));
     }
   }
-  if (skipTags.indexOf('iframe') !== -1) {
-    topLevel.forEach(top =>
-      scanner_update_tag(top, (tag, item) => {
-        if (tag.name.toLowerCase() != 'iframe') {
-          return;
-        }
-        tag.name = 'a';
-        const t = tag.attributes.find(x => x.name.toLowerCase() == 'src');
-        if (t) {
-          const src = t.value;
-          tag.attributes = [{ name: 'href', value: src }];
-          tag.noBody = false;
-          item.children = [{ text: 'iframe: ' + src, children: [] }];
-        } else {
-          tag.attributes = [];
-          item.children = [];
-        }
-      }),
-    );
-  }
-  topLevel = filter_skip_tag_attr(topLevel, skipTags, skipAttrs, skipAttrFs);
+  const skipIFrame = skipTags.includes(Tag_IFrame);
 
-  const hrefPrefix = options && options.hrefPrefix ? options.hrefPrefix : '';
+  const hrefPrefix = options.hrefPrefix || '';
   const addPrefix = genAddPrefix(options.hrefPrefix);
+  const url = options.url || '';
+  const fixUrl = url ? genFixUrl(url) : undefined;
 
-  const url: string = options && options.url ? options.url : '';
-  if (url) {
-    const fixUrl = genFixUrl(url);
-    /* apply url fix */
-    topLevel.forEach(item =>
-      scanner_update_tag(item, tag => {
-        const name = tag.name.toLowerCase();
-        const attrs = tag.attributes;
-        if (name == 'a') {
-          attrs.forEach(a => {
-            if (a.name == 'href' && a.value) {
-              a.value = addPrefix(fixUrl(a.value));
-            }
-          });
-        } else if (name == 'link') {
-          attrs.forEach(a => {
-            if (a.name == 'href' && a.value) {
-              a.value = fixUrl(a.value);
-            }
-          });
-        } else if (name == 'img') {
-          attrs.forEach(a => {
-            if (a.name == 'src' && a.value) {
-              a.value = fixUrl(a.value);
-            }
-          });
-        } else if (name == 'base' && '') {
-          /* breaking image links on some sites */
-          attrs.forEach(a => {
-            if (a.name == 'href' && a.value) {
-              a.value = hrefPrefix;
-            }
-          });
-        } else if (name == 'form' && '') {
-          /* doesn't work */
-          console.error('checking form');
-          const method = attrs.find(a => a.name.toLowerCase() == 'method');
-          if (method && method.value) {
-            switch (method.value.toLowerCase()) {
-              case 'get':
-              case '"get"':
-              case "'get'":
-                attrs.forEach(a => {
-                  if (a.name == 'action' && a.value) {
-                    a.value = addPrefix(fixUrl(a.value));
-                    console.error('added prefix:' + a.value);
-                  }
-                });
-                break;
-            }
+  walkNode(document, node => {
+    node.childNodes = (node.childNodes || []).filter(node => {
+      // skip comment
+      if (node instanceof Comment) {
+        return false;
+      }
+      if (isAnyTagName(node, keepTags)) {
+        return true;
+      }
+
+      const element = node instanceof HTMLElement ? node : undefined;
+
+      if (element) {
+        if (element.isAnyTagName(skipTags)) {
+          return false;
+        }
+        element.attributes.attrs = element.attributes.attrs.filter(
+          attr =>
+            !(
+              typeof attr === 'object' &&
+              (skipAttrs.some(name => attr.name.toLowerCase() === name) ||
+                skipAttrFs.some(f => f(attr.name, attr.value)))
+            ),
+        );
+      }
+
+      if (options.article_mode && element) {
+        if (
+          !(
+            hasElementByTagName(node, Tag_Article) ||
+            hasElementByAnyTagName(node, tag_whitelist)
+          )
+        ) {
+          return false;
+        }
+      }
+
+      if (options.text_mode) {
+        if (node instanceof Text || node instanceof Command) {
+          return true;
+        }
+        if (
+          element.isAnyTagName(textonly_tag_blackList) ||
+          !element.hasText()
+        ) {
+          return false;
+        }
+      }
+
+      if (skipIFrame && element) {
+        if (element.isTagName(Tag_IFrame)) {
+          element.tagName = 'a';
+          const src = element.attributes.getValue('src');
+          if (src) {
+            // has src
+            element.attributes.attrs = [{ name: 'href', value: src }];
+            element.noBody = false;
+            element.notClosed = false;
+            const text = new Text();
+            text.outerHTML = 'iframe: ' + src;
+            element.childNodes = [text];
+            return true;
+          } else {
+            // has no src
+            element.attributes.attrs = [];
+            element.childNodes = [];
+            return false;
           }
         }
-      }),
-    );
-  }
-  if (options && options.textDecorator) {
-    topLevel.forEach(item => scanner_map_text(item, options.textDecorator));
-  }
-  {
-    const themeName = (options && options.theme) || 'default';
-    const themeHTML = ThemeStyles.get(themeName);
-    const themeStyle = parseHTMLTree(themeHTML);
-    const optOutLink = parseHTMLTree(opt_out_link);
-    const optOutLine = parseHTMLTree(opt_out_line);
-    find_or_inject_tag(topLevel, 'body', body => {
-      body.tag.noBody = false;
-      if (body.children.length === 0) {
-        body.children = [...optOutLink];
-      } else {
-        body.children = [
-          ...optOutLink,
-          ...optOutLine,
-          ...themeStyle,
-          ...body.children,
-          ...optOutLine,
-          ...optOutLink,
-        ];
       }
-    });
 
-    if (options.inject_style) {
-      const mobileTopLevel = parseHTMLTree(
-        `<!DOCTYPE html>
+      // fix url
+      if (url && element) {
+        const name = element.tagName.toLowerCase();
+        const updateValue = (name: string, f: (value: string) => string) =>
+          element.attributes.forEachAttr(attr => {
+            if (attr.name.toLowerCase() === name && attr.value) {
+              attr.value = f(attr.value);
+            }
+          });
+        switch (name) {
+          case 'a':
+            updateValue('href', value => addPrefix(fixUrl(value)));
+            break;
+          case 'link':
+            updateValue('href', value => fixUrl(value));
+            break;
+          case 'img':
+            updateValue('src', value => fixUrl(value));
+            break;
+          case 'base':
+            // breaking image links on some sites
+            if ('') {
+              updateValue('href', value => hrefPrefix);
+            }
+            break;
+          case 'form':
+            // doesn't work
+            if ('') {
+              console.error('checking form');
+              updateValue('method', method => {
+                switch (method.toLowerCase()) {
+                  case 'get':
+                  case '"get"':
+                  case "'get'":
+                    updateValue('action', value => {
+                      const newValue = addPrefix(fixUrl(value));
+                      console.error('added prefix: ' + newValue);
+                      return newValue;
+                    });
+                }
+                return method;
+              });
+            }
+            break;
+        }
+      }
+
+      if (options.textDecorator && node instanceof Text) {
+        node.outerHTML = options.textDecorator(node.outerHTML);
+      }
+
+      return true;
+    });
+  });
+
+  walkNodeReversed(document, (node, parent, idx) => {
+    if (node instanceof HTMLElement && node.isTagName('div')) {
+      // remove empty div
+      const minifiedInnerHTML = node.childNodes
+        .map(x => x.minifiedOuterHTML)
+        .join('')
+        .trim();
+      if (minifiedInnerHTML.length === 0) {
+        parent.childNodes.splice(idx, 1);
+        return;
+      }
+      // flatten shallow dom
+      if (node.childNodes.length === 1) {
+        parent.childNodes[idx] = node.childNodes[0];
+      }
+    }
+  });
+
+  // merge text elements, this is possible because original elements in the middle may be removed
+  mergeText(document);
+
+  // inject opt-out link
+  // inject theme style
+  if (body.childNodes.length === 0) {
+    body.childNodes.push(text(opt_out_link));
+  } else {
+    body.childNodes = [
+      text(opt_out_link),
+      text(opt_out_line),
+      text(ThemeStyles.get(options.theme || 'default')),
+      ...body.childNodes,
+      text(opt_out_line),
+      text(opt_out_link),
+    ];
+  }
+
+  if (options.inject_style) {
+    const mobileDocument = parseHtmlDocument(
+      `<!DOCTYPE html>
 <html lang="en" dir="ltr">
 <head>
   <meta charset="UTF-8">
@@ -437,46 +314,45 @@ export function minifyHTML(s: string, options?: MinifyHTMLOptions): string {
 <body>
 </body>
 </html>`.replace(/\n/g, ''),
-      );
-      const [doctype, html] = mobileTopLevel;
-      const [head] = html.children;
+    );
 
-      if (!item_is_command(topLevel[0], 'DOCTYPE')) {
-        topLevel.unshift(doctype);
-      } else {
-        addAttributes(
-          topLevel[0].command.attributes,
-          doctype.command.attributes,
-        );
+    {
+      const first = document.childNodes[0];
+      if (first.outerHTML.toUpperCase().trim() !== '<!DOCTYPE HTML>') {
+        document.childNodes.unshift(text('<!DOCTYPE html>'));
       }
-
-      find_or_inject_tag(
-        topLevel,
-        'html',
-        item =>
-          ((console.log({ html }) as any) && false) ||
-          addAttributes(item.tag.attributes, html.tag.attributes),
-      );
-
-      find_or_inject_tag(topLevel, 'head', item => {
-        item.children = [...head.children, ...item.children];
-        item.tag.noBody = false;
-        item.children.push(...parseHTMLTree(``));
-      });
-
-      find_or_inject_tag(topLevel, 'body', item => {
-        item.tag.noBody = false;
-        item.children.push(
-          ...parseHTMLTree(
-            '<link rel="stylesheet" href="https://unpkg.com/normalize.css@8.0.1/normalize.css" type="text/css">',
-          ),
-          ...parseHTMLTree(
-            '<link rel="stylesheet" href="https://unpkg.com/@beenotung/sakura.css/css/sakura.css" type="text/css">',
-          ),
-        );
-      });
     }
+
+    const lang = findOrInjectAttr(html.attributes, 'lang');
+    lang.value = lang.value || '"en"';
+    const dir = findOrInjectAttr(html.attributes, 'dir');
+    dir.value = dir.value || '"ltr"';
+
+    const metaList = getElementsByTagName(mobileDocument, 'meta');
+    head.childNodes = [...metaList, ...(head.childNodes || [])];
+
+    body.childNodes = [
+      text(
+        '<link rel="stylesheet" href="https://unpkg.com/normalize.css@8.0.1/normalize.css" type="text/css">',
+      ),
+      text(
+        '<link rel="stylesheet" href="https://unpkg.com/@beenotung/sakura.css/css/sakura.css" type="text/css">',
+      ),
+      ...(body.childNodes || []),
+    ];
   }
-  // res.push(`<script>document.baseURI='${hrefPrefix}'</script>`);
-  return topLevel.map(htmlItem_to_string_no_comment).join('');
+
+  return document;
+}
+
+export namespace minifyDocument {
+  export let skipClone = true;
+}
+
+export function minifyHTML(html: string, options: MinifyHTMLOptions): string {
+  if (!html) {
+    return '';
+  }
+  const document = parseHtmlDocument(html);
+  return minifyDocument(document, options).minifiedOuterHTML;
 }
