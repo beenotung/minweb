@@ -7,7 +7,7 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "postformat": "tslint --fix -p .",
     "prebuild": "rm -rf ./dist",
-    "build": "parcel build --target node --no-source-maps src/webtask.ts",
+    "build": "parcel build --target=node --no-minify --no-source-maps --experimental-scope-hoisting src/webtask.ts -o dist/webtask.js",
     "test": "ts-node src/test.ts"
   },
   "keywords": [
