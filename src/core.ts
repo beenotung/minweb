@@ -58,7 +58,7 @@ function findOrInjectAttr(attrs: Attributes, name: string): Attr {
 }
 
 /* tslint:disable:no-unused-variable */
-const dev = console.log.bind(console, '[core]');
+// const dev = console.log.bind(console, '[core]');
 /* tslint:enable:no-unused-variable */
 
 function findOrInjectElement(

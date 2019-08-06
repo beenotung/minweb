@@ -1,5 +1,5 @@
-import { MinifyHTMLOptions } from './helpers';
 import { minifyHTML } from './core';
+import { MinifyHTMLOptions } from './helpers';
 
 const fetch = require('node-fetch');
 
