@@ -1,4 +1,4 @@
-import { MinifyHTMLOptions } from './core';
+import { MinifyHTMLOptions } from './helpers';
 import { main } from './main';
 import { Theme } from './theme';
 
