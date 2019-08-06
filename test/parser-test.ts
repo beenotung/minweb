@@ -63,3 +63,5 @@ testFile(test, 'demo/svg.html');
 testUrl(test, 'http://yahoo.hk');
 testUrl(test, 'https://www.forbes.com/sites/jennifercohen/2014/06/18/5-proven-methods-for-gaining-self-discipline/');
 testUrl(test, 'https://www.jessicahk.com/articles/qing-gan-ce-shi-kan-ni-shi-fou-hao-se-nu');
+// xhtml and extra string quote in attr
+testUrl(test,'https://s.nextmedia.com/realtime/a.php?i=20190806&s=7015342&a=59901011');
