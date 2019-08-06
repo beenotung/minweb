@@ -1,0 +1,20 @@
+#!/bin/bash
+set -e
+set -o pipefail
+echo "
+import { IncomingMessage as Request, ServerResponse as Response } from 'http';
+" > bundle.ts
+cat node_modules/@beenotung/html-parser/src/core.ts >> bundle.ts
+ls src/*.ts \
+  | tac - \
+  | grep -v server.ts \
+  | xargs cat \
+  | tr '\n' '\t' \
+  | perl -pe 's|import .*?;||g' \
+  | tr '\t' '\n' \
+  | grep -v '@beenotung/html-parser' \
+  >> bundle.ts
+tsc --target es5 --module commonjs bundle.ts
+du -h --apparent-size bundle.js
+cat bundle.js | xclip -sel clipboard
+echo "saved bundle.js to clipboard"

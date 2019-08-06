@@ -21,3 +21,5 @@ in.html
 /root.json
 /wrapped-root.json
 /.cache/
+/bundle.ts
+/bundle.js
