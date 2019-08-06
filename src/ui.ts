@@ -184,4 +184,6 @@ export function handle(req: Request, res: Response) {
   if (req.url.endsWith(baseUrl)) {
     return handleUI(req, res);
   }
+  // fallback, forgot to update origin in config.ts?
+  return handleUI(req, res);
 }
