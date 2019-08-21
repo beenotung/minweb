@@ -24,11 +24,11 @@ export async function main(
   }
   return fetch(checkUrl(url))
     .then(x => x.text())
-    .then(html => {
+    .then(async html => {
       if (htmlWatcher) {
         htmlWatcher(html);
       }
-      const minifiedHtml = minifyHTML(html, options);
+      const minifiedHtml = await minifyHTML(html, options);
       const p =
         Math.round((minifiedHtml.length / html.length) * 100 * 100) / 100;
       return (

@@ -121,7 +121,8 @@ const mobileMetaList = getElementsByTagName(mobileDocument, 'meta');
 export function minifyDocument(
   document: Document,
   options: MinifyHTMLOptions,
-): Document {
+  originalHtml: string,
+): Promise<Document> {
   if (!minifyDocument.skipClone) {
     document = document.clone();
   }
@@ -301,6 +302,35 @@ export function minifyDocument(
   // merge text elements, this is possible because original elements in the middle may be removed
   mergeText(document);
 
+  if (
+    body.childNodes
+      .map(c => c.outerHTML)
+      .join('')
+      .trim().length === 0 &&
+    options.article_mode
+  ) {
+    // is empty
+    return require('read-art')(originalHtml).then(article => {
+      const html = `<html lang="en"
+<head>
+<meta charset="UTF-8">
+<title>${article.title}</title>
+</head>
+<body>
+${article.title}
+<hr>
+<p>${article.content}</p>
+</body>
+</html>`;
+      document = parseHtmlDocument(html);
+      options = {
+        ...options,
+        article_mode: false,
+      };
+      return minifyDocument(document, options, html);
+    });
+  }
+
   // inject opt-out link
   // inject theme style
   if (body.childNodes.length === 0) {
@@ -342,17 +372,20 @@ export function minifyDocument(
     ];
   }
 
-  return document;
+  return Promise.resolve(document);
 }
 
 export namespace minifyDocument {
   export let skipClone = true;
 }
 
-export function minifyHTML(html: string, options: MinifyHTMLOptions): string {
+export async function minifyHTML(
+  html: string,
+  options: MinifyHTMLOptions,
+): Promise<string> {
   if (!html) {
     return '';
   }
   const document = parseHtmlDocument(html);
-  return minifyDocument(document, options).minifiedOuterHTML;
+  return (await minifyDocument(document, options, html)).minifiedOuterHTML;
 }
