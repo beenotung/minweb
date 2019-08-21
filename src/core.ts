@@ -102,6 +102,22 @@ function text(text: string): Text {
   return node;
 }
 
+const mobileDocument = parseHtmlDocument(
+  `<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="msapplication-tap-highlight" content="no">
+</head>
+<body>
+</body>
+</html>`.replace(/\n/g, ''),
+);
+const mobileMetaList = getElementsByTagName(mobileDocument, 'meta');
+
 export function minifyDocument(
   document: Document,
   options: MinifyHTMLOptions,
@@ -301,21 +317,6 @@ export function minifyDocument(
   }
 
   if (options.inject_style) {
-    const mobileDocument = parseHtmlDocument(
-      `<!DOCTYPE html>
-<html lang="en" dir="ltr">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="format-detection" content="telephone=no">
-  <meta name="msapplication-tap-highlight" content="no">
-</head>
-<body>
-</body>
-</html>`.replace(/\n/g, ''),
-    );
-
     {
       const first = document.childNodes[0];
       if (first.outerHTML.toUpperCase().trim() !== '<!DOCTYPE HTML>') {
@@ -328,8 +329,7 @@ export function minifyDocument(
     const dir = findOrInjectAttr(html.attributes, 'dir');
     dir.value = dir.value || '"ltr"';
 
-    const metaList = getElementsByTagName(mobileDocument, 'meta');
-    head.childNodes = [...metaList, ...(head.childNodes || [])];
+    head.childNodes = [...mobileMetaList, ...(head.childNodes || [])];
 
     body.childNodes = [
       text(
