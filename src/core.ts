@@ -357,8 +357,7 @@ export async function minifyHTML(
     return '';
   }
   let document = parseHtmlDocument(html);
-  const article = getElementByTagName(document, 'article');
-  if (!article) {
+  if (options.article_mode && !getElementByTagName(document, 'article')) {
     // in article-mode, but no article element in the html
     await require('read-art')(html).then(article => {
       html = `<html lang="en"
