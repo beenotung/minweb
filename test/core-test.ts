@@ -51,7 +51,7 @@ async function test(html: string, filename: string): Promise<any> {
   ps.push(saveFile('in-root.txt', util.inspect(document, { depth: 999 })));
 
   minifyDocument.skipClone = false;
-  const minifiedDocument = await minifyDocument(document, options, html);
+  const minifiedDocument = await minifyDocument(document, options);
   ps.push(saveFile('out-root.json', JSON.stringify(wrapNode(minifiedDocument), null, 2)));
   ps.push(saveFile('out-root.txt', util.inspect(minifiedDocument, { depth: 999 })));
 

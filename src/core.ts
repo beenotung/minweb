@@ -121,8 +121,7 @@ const mobileMetaList = getElementsByTagName(mobileDocument, 'meta');
 export function minifyDocument(
   document: Document,
   options: MinifyHTMLOptions,
-  originalHtml: string,
-): Promise<Document> {
+): Document {
   if (!minifyDocument.skipClone) {
     document = document.clone();
   }
@@ -302,35 +301,6 @@ export function minifyDocument(
   // merge text elements, this is possible because original elements in the middle may be removed
   mergeText(document);
 
-  if (
-    body.childNodes
-      .map(c => c.outerHTML)
-      .join('')
-      .trim().length === 0 &&
-    options.article_mode
-  ) {
-    // is empty
-    return require('read-art')(originalHtml).then(article => {
-      const html = `<html lang="en"
-<head>
-<meta charset="UTF-8">
-<title>${article.title}</title>
-</head>
-<body>
-${article.title}
-<hr>
-<p>${article.content}</p>
-</body>
-</html>`;
-      document = parseHtmlDocument(html);
-      options = {
-        ...options,
-        article_mode: false,
-      };
-      return minifyDocument(document, options, html);
-    });
-  }
-
   // inject opt-out link
   // inject theme style
   if (body.childNodes.length === 0) {
@@ -372,7 +342,7 @@ ${article.title}
     ];
   }
 
-  return Promise.resolve(document);
+  return document;
 }
 
 export namespace minifyDocument {
@@ -386,6 +356,28 @@ export async function minifyHTML(
   if (!html) {
     return '';
   }
-  const document = parseHtmlDocument(html);
-  return (await minifyDocument(document, options, html)).minifiedOuterHTML;
+  let document = parseHtmlDocument(html);
+  const article = getElementByTagName(document, 'article');
+  if (!article) {
+    // in article-mode, but no article element in the html
+    await require('read-art')(html).then(article => {
+      html = `<html lang="en"
+<head>
+<meta charset="UTF-8">
+<title>${article.title}</title>
+</head>
+<body>
+${article.title}
+<hr>
+<p>${article.content}</p>
+</body>
+</html>`;
+      document = parseHtmlDocument(html);
+      options = {
+        ...options,
+        article_mode: false,
+      };
+    });
+  }
+  return minifyDocument(document, options).minifiedOuterHTML;
 }
